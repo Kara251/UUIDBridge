@@ -1,0 +1,80 @@
+plugins {
+    id "com.gradleup.shadow"
+}
+
+architectury {
+    platformSetupLoomIde()
+    fabric()
+}
+
+configurations {
+    common
+    shadowCommon
+    compileClasspath.extendsFrom common
+    runtimeClasspath.extendsFrom common
+    developmentFabric.extendsFrom common
+}
+
+dependencies {
+    modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+
+    common(project(path: ":common", configuration: "namedElements")) {
+        transitive = false
+    }
+    shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) {
+        transitive = false
+    }
+}
+
+loom {
+    runs {
+        client {
+            client()
+            configName = "UUIDBridge Fabric Client"
+            runDir "run/fabric-client"
+        }
+        server {
+            server()
+            configName = "UUIDBridge Fabric Server"
+            runDir "run/fabric-server"
+        }
+    }
+}
+
+processResources {
+    inputs.property "version", rootProject.mod_version
+    inputs.property "modId", rootProject.mod_id
+    inputs.property "modName", rootProject.mod_name
+    inputs.property "modDescription", rootProject.mod_description
+    inputs.property "minecraftVersion", rootProject.minecraft_version
+    inputs.property "fabricLoaderVersion", rootProject.fabric_loader_version
+
+    filesMatching("fabric.mod.json") {
+        expand(
+            version: rootProject.mod_version,
+            modId: rootProject.mod_id,
+            modName: rootProject.mod_name,
+            modDescription: rootProject.mod_description,
+            minecraftVersion: rootProject.minecraft_version,
+            fabricLoaderVersion: rootProject.fabric_loader_version
+        )
+    }
+}
+
+shadowJar {
+    configurations = [project.configurations.shadowCommon]
+    archiveClassifier = "dev-shadow"
+}
+
+remapJar {
+    inputFile.set shadowJar.archiveFile
+    dependsOn shadowJar
+    archiveClassifier = null
+}
+
+sourcesJar {
+    def commonSources = project(":common").tasks.named("sourcesJar")
+    dependsOn commonSources
+    from zipTree(commonSources.get().archiveFile)
+}

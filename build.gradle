@@ -1,0 +1,78 @@
+plugins {
+    id "architectury-plugin" version "${architectury_plugin_version}"
+    id "dev.architectury.loom" version "${architectury_loom_version}" apply false
+    id "com.gradleup.shadow" version "8.3.6" apply false
+}
+
+architectury {
+    minecraft = minecraft_version
+}
+
+subprojects {
+    apply plugin: "dev.architectury.loom"
+
+    loom {
+        silentMojangMappingsLicense()
+    }
+
+    repositories {
+        mavenCentral()
+        maven { url "https://maven.architectury.dev/" }
+        maven { url "https://maven.fabricmc.net/" }
+        maven { url "https://maven.minecraftforge.net/" }
+        maven { url "https://maven.neoforged.net/releases/" }
+    }
+
+    dependencies {
+        minecraft "com.mojang:minecraft:${rootProject.minecraft_version}"
+        mappings loom.officialMojangMappings()
+    }
+}
+
+allprojects {
+    apply plugin: "java"
+    apply plugin: "architectury-plugin"
+    apply plugin: "maven-publish"
+
+    group = rootProject.maven_group
+    version = rootProject.mod_version
+
+    base {
+        archivesName = "${rootProject.archives_base_name}-${project.name}"
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(rootProject.java_version as int)
+        }
+        withSourcesJar()
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = "UTF-8"
+        options.release = rootProject.java_version as int
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+    }
+}
+
+tasks.register("stageModJars", Sync) {
+    group = "distribution"
+    description = "Stages installable mod jars for all supported loaders."
+    into layout.buildDirectory.dir("distributions/mods")
+    from(project(":fabric").tasks.named("remapJar")) {
+        into "fabric"
+    }
+    from(project(":forge").tasks.named("remapJar")) {
+        into "forge"
+    }
+    from(project(":neoforge").tasks.named("remapJar")) {
+        into "neoforge"
+    }
+}
+
+tasks.named("assemble") {
+    dependsOn "stageModJars"
+}

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "${modId}",
+  "version": "${version}",
+  "name": "${modName}",
+  "description": "${modDescription}",
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dev.kara.uuidbridge.fabric.UuidBridgeFabric"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=${fabricLoaderVersion}",
+    "minecraft": "${minecraftVersion}"
+  }
+}

@@ -1,0 +1,154 @@
+package dev.kara.uuidbridge.command;
+
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import dev.kara.uuidbridge.UuidBridge;
+import dev.kara.uuidbridge.migration.MigrationDirection;
+import dev.kara.uuidbridge.migration.MigrationPlan;
+import dev.kara.uuidbridge.migration.MigrationService;
+import dev.kara.uuidbridge.migration.ScanResult;
+import dev.kara.uuidbridge.migration.io.UuidBridgePaths;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
+import java.nio.file.Path;
+import java.util.Optional;
+
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
+
+public final class UuidBridgeCommands {
+    private static final MigrationService SERVICE = new MigrationService();
+
+    private UuidBridgeCommands() {
+    }
+
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(literal("uuidbridge")
+            .requires(source -> source.hasPermission(4))
+            .then(literal("scan")
+                .then(argument("direction", StringArgumentType.word())
+                    .executes(context -> scan(context.getSource(),
+                        StringArgumentType.getString(context, "direction"), ""))))
+            .then(literal("plan")
+                .then(argument("direction", StringArgumentType.word())
+                    .executes(context -> plan(context.getSource(),
+                        StringArgumentType.getString(context, "direction"), ""))
+                    .then(argument("options", StringArgumentType.greedyString())
+                        .executes(context -> plan(context.getSource(),
+                            StringArgumentType.getString(context, "direction"),
+                            StringArgumentType.getString(context, "options"))))))
+            .then(literal("apply")
+                .then(argument("planId", StringArgumentType.word())
+                    .then(argument("options", StringArgumentType.greedyString())
+                        .executes(context -> apply(context.getSource(),
+                            StringArgumentType.getString(context, "planId"),
+                            StringArgumentType.getString(context, "options"))))))
+            .then(literal("status")
+                .executes(context -> status(context.getSource())))
+            .then(literal("cancel")
+                .then(argument("planId", StringArgumentType.word())
+                    .executes(context -> cancel(context.getSource(),
+                        StringArgumentType.getString(context, "planId"))))));
+    }
+
+    private static int scan(CommandSourceStack source, String directionValue, String rawOptions) {
+        try {
+            CommandOptions options = CommandOptions.parse(rawOptions);
+            MigrationDirection direction = MigrationDirection.parse(directionValue);
+            ScanResult result = SERVICE.scan(paths(source), direction, options.mapping(), options.allowNetwork());
+            send(source, "UUIDBridge scan: " + result.knownPlayers() + " known players, "
+                + result.mappings() + " mappings, " + result.estimatedChanges().size()
+                + " files with estimated changes.");
+            if (!result.conflicts().isEmpty()) {
+                send(source, "Conflicts: " + result.conflicts().size());
+            }
+            if (!result.missingMappings().isEmpty()) {
+                send(source, "Missing mappings: " + result.missingMappings().size());
+            }
+            return result.conflicts().isEmpty() && result.missingMappings().isEmpty() ? 1 : 0;
+        } catch (Exception exception) {
+            fail(source, exception);
+            return 0;
+        }
+    }
+
+    private static int plan(CommandSourceStack source, String directionValue, String rawOptions) {
+        try {
+            CommandOptions options = CommandOptions.parse(rawOptions);
+            MigrationDirection direction = MigrationDirection.parse(directionValue);
+            MigrationPlan plan = SERVICE.createPlan(paths(source), direction, options.mapping(), options.allowNetwork());
+            send(source, "UUIDBridge plan created: " + plan.id());
+            send(source, "Mappings: " + plan.mappings().size()
+                + ", estimated changes: " + plan.estimatedChanges().size()
+                + ", conflicts: " + plan.conflicts().size()
+                + ", missing: " + plan.missingMappings().size());
+            if (plan.canApply()) {
+                send(source, "Use /uuidbridge apply " + plan.id() + " --confirm, then restart the server.");
+            } else {
+                send(source, "Plan is not applyable until conflicts and missing mappings are fixed.");
+            }
+            return plan.canApply() ? 1 : 0;
+        } catch (Exception exception) {
+            fail(source, exception);
+            return 0;
+        }
+    }
+
+    private static int apply(CommandSourceStack source, String planId, String rawOptions) {
+        try {
+            CommandOptions options = CommandOptions.parse(rawOptions);
+            if (!options.confirm()) {
+                fail(source, "Refusing to apply without --confirm.");
+                return 0;
+            }
+            SERVICE.markPending(paths(source), planId);
+            send(source, "UUIDBridge plan marked pending: " + planId);
+            send(source, "Restart the server to apply it before the world is used.");
+            return 1;
+        } catch (Exception exception) {
+            fail(source, exception);
+            return 0;
+        }
+    }
+
+    private static int status(CommandSourceStack source) {
+        try {
+            UuidBridgePaths paths = paths(source);
+            Optional<String> pending = SERVICE.pendingPlan(paths);
+            Optional<Path> latestReport = SERVICE.latestReport(paths);
+            send(source, "UUIDBridge pending plan: " + pending.orElse("none"));
+            send(source, "UUIDBridge latest report: " + latestReport.map(Path::toString).orElse("none"));
+            return pending.isPresent() || latestReport.isPresent() ? 1 : 0;
+        } catch (Exception exception) {
+            fail(source, exception);
+            return 0;
+        }
+    }
+
+    private static int cancel(CommandSourceStack source, String planId) {
+        try {
+            boolean canceled = SERVICE.cancel(paths(source), planId);
+            send(source, canceled ? "UUIDBridge canceled pending plan: " + planId : "No matching pending plan.");
+            return canceled ? 1 : 0;
+        } catch (Exception exception) {
+            fail(source, exception);
+            return 0;
+        }
+    }
+
+    private static UuidBridgePaths paths(CommandSourceStack source) {
+        return UuidBridge.paths(source.getServer());
+    }
+
+    private static void send(CommandSourceStack source, String message) {
+        source.sendSuccess(() -> Component.literal(message), false);
+    }
+
+    private static void fail(CommandSourceStack source, Exception exception) {
+        fail(source, exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage());
+    }
+
+    private static void fail(CommandSourceStack source, String message) {
+        source.sendFailure(Component.literal("UUIDBridge: " + message));
+    }
+}

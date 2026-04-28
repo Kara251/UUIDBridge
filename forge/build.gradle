@@ -1,0 +1,78 @@
+plugins {
+    id "com.gradleup.shadow"
+}
+
+architectury {
+    platformSetupLoomIde()
+    forge()
+}
+
+loom {
+    forge {
+        convertAccessWideners = true
+    }
+    runs {
+        client {
+            client()
+            configName = "UUIDBridge Forge Client"
+            runDir "run/forge-client"
+        }
+        server {
+            server()
+            configName = "UUIDBridge Forge Server"
+            runDir "run/forge-server"
+        }
+    }
+}
+
+configurations {
+    common
+    shadowCommon
+    compileClasspath.extendsFrom common
+    runtimeClasspath.extendsFrom common
+    developmentForge.extendsFrom common
+}
+
+dependencies {
+    forge "net.minecraftforge:forge:${rootProject.minecraft_version}-${rootProject.forge_version}"
+
+    common(project(path: ":common", configuration: "namedElements")) {
+        transitive = false
+    }
+    shadowCommon(project(path: ":common", configuration: "transformProductionForge")) {
+        transitive = false
+    }
+}
+
+processResources {
+    def properties = [
+        version: rootProject.mod_version,
+        modId: rootProject.mod_id,
+        modName: rootProject.mod_name,
+        modDescription: rootProject.mod_description,
+        minecraftVersion: rootProject.minecraft_version,
+        minecraftVersionUpper: rootProject.minecraft_version_upper,
+        forgeVersion: rootProject.forge_version
+    ]
+    inputs.properties properties
+    filesMatching(["META-INF/mods.toml", "pack.mcmeta"]) {
+        expand properties
+    }
+}
+
+shadowJar {
+    configurations = [project.configurations.shadowCommon]
+    archiveClassifier = "dev-shadow"
+}
+
+remapJar {
+    inputFile.set shadowJar.archiveFile
+    dependsOn shadowJar
+    archiveClassifier = null
+}
+
+sourcesJar {
+    def commonSources = project(":common").tasks.named("sourcesJar")
+    dependsOn commonSources
+    from zipTree(commonSources.get().archiveFile)
+}
