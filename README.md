@@ -21,6 +21,7 @@ and restart again.
 ## Documentation
 
 - [Operations guide](docs/operations.md)
+- [Extra migration targets](docs/compat/targets.md)
 - [Development guide](docs/development.md)
 - [Changelog](CHANGELOG.md)
 

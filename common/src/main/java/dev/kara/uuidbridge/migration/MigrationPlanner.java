@@ -2,7 +2,9 @@ package dev.kara.uuidbridge.migration;
 
 import dev.kara.uuidbridge.migration.io.KnownPlayerScanner;
 import dev.kara.uuidbridge.migration.io.UuidBridgePaths;
+import dev.kara.uuidbridge.migration.rewrite.SingleplayerPlayerExtractor;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -29,12 +31,26 @@ public final class MigrationPlanner {
         Optional<Path> mappingFile,
         boolean allowNetwork
     ) throws IOException {
+        return scan(paths, direction, mappingFile, allowNetwork, Optional.empty(), Optional.empty());
+    }
+
+    public ScanResult scan(
+        UuidBridgePaths paths,
+        MigrationDirection direction,
+        Optional<Path> mappingFile,
+        boolean allowNetwork,
+        Optional<Path> targetsFile,
+        Optional<String> singleplayerName
+    ) throws IOException {
         List<KnownPlayer> players = KnownPlayerScanner.scan(paths.gameDir(), paths.worldDir());
         UuidResolver.ResolvedMappings resolved = resolver.resolve(direction, players, mappingFile, allowNetwork);
-        List<PlanConflict> conflicts = conflicts(resolved.mappings());
-        List<PlannedChange> estimated = estimate(paths, resolved.mappings());
+        List<PlanConflict> conflicts = new ArrayList<>(conflicts(resolved.mappings()));
+        List<MissingMapping> missing = new ArrayList<>(resolved.missingMappings());
+        SingleplayerPlayerCopy singleplayerCopy = singleplayerCopy(paths, resolved.mappings(), singleplayerName,
+            conflicts, missing);
+        Estimate estimate = estimate(paths, resolved.mappings(), targetsFile, singleplayerCopy);
         return new ScanResult(direction, players.size(), resolved.mappings().size(),
-            conflicts, resolved.missingMappings(), estimated);
+            List.copyOf(conflicts), List.copyOf(missing), estimate.changes(), estimate.coverage());
     }
 
     public MigrationPlan createPlan(
@@ -43,10 +59,24 @@ public final class MigrationPlanner {
         Optional<Path> mappingFile,
         boolean allowNetwork
     ) throws IOException {
+        return createPlan(paths, direction, mappingFile, allowNetwork, Optional.empty(), Optional.empty());
+    }
+
+    public MigrationPlan createPlan(
+        UuidBridgePaths paths,
+        MigrationDirection direction,
+        Optional<Path> mappingFile,
+        boolean allowNetwork,
+        Optional<Path> targetsFile,
+        Optional<String> singleplayerName
+    ) throws IOException {
         List<KnownPlayer> players = KnownPlayerScanner.scan(paths.gameDir(), paths.worldDir());
         UuidResolver.ResolvedMappings resolved = resolver.resolve(direction, players, mappingFile, allowNetwork);
-        List<PlanConflict> conflicts = conflicts(resolved.mappings());
-        List<PlannedChange> estimated = estimate(paths, resolved.mappings());
+        List<PlanConflict> conflicts = new ArrayList<>(conflicts(resolved.mappings()));
+        List<MissingMapping> missing = new ArrayList<>(resolved.missingMappings());
+        SingleplayerPlayerCopy singleplayerCopy = singleplayerCopy(paths, resolved.mappings(), singleplayerName,
+            conflicts, missing);
+        Estimate estimate = estimate(paths, resolved.mappings(), targetsFile, singleplayerCopy);
         String id = direction.id() + "-" + Instant.now().toString()
             .replace(":", "")
             .replace(".", "");
@@ -55,11 +85,14 @@ public final class MigrationPlanner {
             direction,
             resolved.mappings(),
             targetPaths(paths),
-            estimated,
-            conflicts,
-            resolved.missingMappings(),
+            estimate.changes(),
+            List.copyOf(conflicts),
+            List.copyOf(missing),
             Instant.now().toString(),
-            allowNetwork
+            allowNetwork,
+            estimate.coverage(),
+            singleplayerCopy,
+            targetsFile.map(Path::toString).orElse("")
         );
     }
 
@@ -75,15 +108,25 @@ public final class MigrationPlanner {
             .toList();
     }
 
-    private static List<PlannedChange> estimate(UuidBridgePaths paths, List<UuidMapping> mappings) throws IOException {
+    private static Estimate estimate(
+        UuidBridgePaths paths,
+        List<UuidMapping> mappings,
+        Optional<Path> targetsFile,
+        SingleplayerPlayerCopy singleplayerPlayerCopy
+    ) throws IOException {
         if (mappings.isEmpty()) {
-            return List.of();
+            return new Estimate(List.of(), CoverageReport.empty());
         }
         List<PlannedChange> changes = new ArrayList<>();
-        for (Path file : WorldFileScanner.discover(paths)) {
+        List<DiscoveredFile> files = WorldFileScanner.discoverTargets(paths, targetsFile);
+        for (DiscoveredFile file : files) {
+            if (FileMigrator.shouldSkipLargeUnknown(file)) {
+                continue;
+            }
             FileChangeResult result = FileMigrator.preview(file, mappings);
             if (result.changed()) {
-                changes.add(new PlannedChange(label(paths, file), result.replacements(), "rewrite"));
+                changes.add(new PlannedChange(label(paths, file.path()), result.replacements(),
+                    "rewrite:" + file.adapter()));
             }
         }
         for (Path file : WorldFileScanner.playerUuidFiles(paths)) {
@@ -92,7 +135,54 @@ public final class MigrationPlanner {
                 changes.add(new PlannedChange(label(paths, file) + " -> " + renamed, 1, "rename"));
             }
         }
-        return changes;
+        if (singleplayerPlayerCopy != null) {
+            changes.add(new PlannedChange(singleplayerPlayerCopy.sourcePath() + " -> "
+                + singleplayerPlayerCopy.targetPath(), 1, "singleplayer-player-copy"));
+        }
+        long replacements = changes.stream().mapToLong(PlannedChange::replacements).sum();
+        return new Estimate(List.copyOf(changes), WorldFileScanner.coverage(paths, files, replacements));
+    }
+
+    private static SingleplayerPlayerCopy singleplayerCopy(
+        UuidBridgePaths paths,
+        List<UuidMapping> mappings,
+        Optional<String> singleplayerName,
+        List<PlanConflict> conflicts,
+        List<MissingMapping> missing
+    ) throws IOException {
+        if (singleplayerName.isEmpty() || singleplayerName.get().isBlank()) {
+            return null;
+        }
+        String name = singleplayerName.get();
+        Optional<UuidMapping> mapping = mappings.stream()
+            .filter(value -> value.name().equalsIgnoreCase(name))
+            .findFirst();
+        if (mapping.isEmpty()) {
+            missing.add(new MissingMapping(name, null, "No mapping found for --singleplayer-name."));
+            return null;
+        }
+        Path source = paths.worldDir().resolve("level.dat");
+        if (!Files.isRegularFile(source)) {
+            return null;
+        }
+        Optional<byte[]> playerData = SingleplayerPlayerExtractor.extractGzipPlayerData(
+            Files.readAllBytes(source), List.of(mapping.get()));
+        if (playerData.isEmpty()) {
+            return null;
+        }
+        Path target = paths.worldDir().resolve("playerdata").resolve(mapping.get().toUuid() + ".dat");
+        if (Files.exists(target)) {
+            conflicts.add(new PlanConflict(mapping.get().toUuid(), List.of(mapping.get().name()),
+                "Singleplayer playerdata target already exists: " + label(paths, target)));
+            return null;
+        }
+        return new SingleplayerPlayerCopy(
+            mapping.get().name(),
+            label(paths, source),
+            label(paths, target),
+            mapping.get().fromUuid(),
+            mapping.get().toUuid()
+        );
     }
 
     static String renamedPlayerFile(Path file, List<UuidMapping> mappings) {
@@ -132,5 +222,8 @@ public final class MigrationPlanner {
             paths.gameDir().resolve("usercache.json").toString(),
             paths.worldDir().toString()
         );
+    }
+
+    private record Estimate(List<PlannedChange> changes, CoverageReport coverage) {
     }
 }

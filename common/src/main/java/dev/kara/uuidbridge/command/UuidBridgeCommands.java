@@ -31,7 +31,11 @@ public final class UuidBridgeCommands {
             .then(literal("scan")
                 .then(argument("direction", StringArgumentType.word())
                     .executes(context -> scan(context.getSource(),
-                        StringArgumentType.getString(context, "direction"), ""))))
+                        StringArgumentType.getString(context, "direction"), ""))
+                    .then(argument("options", StringArgumentType.greedyString())
+                        .executes(context -> scan(context.getSource(),
+                            StringArgumentType.getString(context, "direction"),
+                            StringArgumentType.getString(context, "options"))))))
             .then(literal("plan")
                 .then(argument("direction", StringArgumentType.word())
                     .executes(context -> plan(context.getSource(),
@@ -64,7 +68,8 @@ public final class UuidBridgeCommands {
         try {
             CommandOptions options = CommandOptions.parse(rawOptions);
             MigrationDirection direction = MigrationDirection.parse(directionValue);
-            ScanResult result = SERVICE.scan(paths(source), direction, options.mapping(), options.allowNetwork());
+            ScanResult result = SERVICE.scan(paths(source), direction, options.mapping(), options.allowNetwork(),
+                options.targets(), options.singleplayerName());
             long replacements = result.estimatedChanges().stream()
                 .mapToLong(change -> change.replacements())
                 .sum();
@@ -72,6 +77,9 @@ public final class UuidBridgeCommands {
                 + ", mappings=" + result.mappings()
                 + ", filesWithChanges=" + result.estimatedChanges().size()
                 + ", estimatedReplacements=" + replacements + ".");
+            send(source, "Coverage: scanned=" + result.coverage().scannedFiles()
+                + ", skipped=" + result.coverage().skippedFiles()
+                + ", targets=" + result.coverage().targets().size() + ".");
             if (!result.conflicts().isEmpty()) {
                 send(source, "Conflicts: " + result.conflicts().size()
                     + " target UUID collision(s); inspect the generated mapping inputs.");
@@ -91,7 +99,8 @@ public final class UuidBridgeCommands {
         try {
             CommandOptions options = CommandOptions.parse(rawOptions);
             MigrationDirection direction = MigrationDirection.parse(directionValue);
-            MigrationPlan plan = SERVICE.createPlan(paths(source), direction, options.mapping(), options.allowNetwork());
+            MigrationPlan plan = SERVICE.createPlan(paths(source), direction, options.mapping(), options.allowNetwork(),
+                options.targets(), options.singleplayerName());
             send(source, "UUIDBridge plan created: " + plan.id());
             long replacements = plan.estimatedChanges().stream()
                 .mapToLong(change -> change.replacements())
@@ -101,6 +110,12 @@ public final class UuidBridgeCommands {
                 + ", estimatedReplacements: " + replacements
                 + ", conflicts: " + plan.conflicts().size()
                 + ", missing: " + plan.missingMappings().size());
+            send(source, "Coverage: scanned=" + plan.coverage().scannedFiles()
+                + ", skipped=" + plan.coverage().skippedFiles()
+                + ", targets=" + plan.coverage().targets().size());
+            if (plan.singleplayerPlayerCopy() != null) {
+                send(source, "Singleplayer Player copy planned for " + plan.singleplayerPlayerCopy().name() + ".");
+            }
             if (plan.canApply()) {
                 send(source, "Use /uuidbridge apply " + plan.id() + " --confirm, then restart the server.");
             } else {
@@ -145,6 +160,15 @@ public final class UuidBridgeCommands {
                 .orElse("none"));
             Optional<String> planForManifest = pending.map(PendingMigration::planId)
                 .or(() -> latestReport.flatMap(path -> reportPlanId(path.getFileName().toString())));
+            if (pending.isPresent()) {
+                Optional<MigrationPlan> pendingPlan = SERVICE.plan(paths, pending.get().planId());
+                if (pendingPlan.isPresent()) {
+                    CoverageLine coverage = coverageLine(pendingPlan.get());
+                    send(source, "UUIDBridge coverage: scanned=" + coverage.scanned()
+                        + ", skipped=" + coverage.skipped()
+                        + ", targets=" + coverage.targets());
+                }
+            }
             if (planForManifest.isPresent()) {
                 Optional<BackupManifest> manifest = SERVICE.backupManifest(paths, planForManifest.get());
                 send(source, "UUIDBridge backup manifest: " + manifest
@@ -213,5 +237,16 @@ public final class UuidBridgeCommands {
             return Optional.of(stem.substring(0, stem.length() - "-rollback".length()));
         }
         return Optional.of(stem);
+    }
+
+    private static CoverageLine coverageLine(MigrationPlan plan) {
+        return new CoverageLine(
+            plan.coverage().scannedFiles(),
+            plan.coverage().skippedFiles(),
+            plan.coverage().targets().size()
+        );
+    }
+
+    private record CoverageLine(long scanned, long skipped, long targets) {
     }
 }

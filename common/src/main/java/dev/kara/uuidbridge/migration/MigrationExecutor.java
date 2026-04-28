@@ -3,6 +3,7 @@ package dev.kara.uuidbridge.migration;
 import dev.kara.uuidbridge.migration.io.JsonCodecs;
 import dev.kara.uuidbridge.migration.io.SafeFileWriter;
 import dev.kara.uuidbridge.migration.io.UuidBridgePaths;
+import dev.kara.uuidbridge.migration.rewrite.SingleplayerPlayerExtractor;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -13,6 +14,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Optional;
 
 public final class MigrationExecutor {
     public MigrationReport execute(UuidBridgePaths paths, MigrationPlan plan) throws IOException {
@@ -34,7 +36,8 @@ public final class MigrationExecutor {
         String finalState = "APPLY_FAILED";
 
         try {
-            if (applyRewrites(paths, plan, backups, changed, applyErrors)
+            if (applyRewrites(paths, plan, backups, changed, skipped, applyErrors)
+                && applySingleplayerPlayerCopy(paths, plan, backups, changed, skipped, applyErrors)
                 && applyRenames(paths, plan, backups, changed, skipped, applyErrors)) {
                 finalState = "APPLIED";
                 backups.writeManifest(true);
@@ -103,25 +106,72 @@ public final class MigrationExecutor {
         MigrationPlan plan,
         BackupManager backups,
         List<PlannedChange> changed,
+        List<String> skipped,
         List<String> errors
     ) throws IOException {
-        for (Path file : WorldFileScanner.discover(paths)) {
+        Optional<Path> targetsFile = plan.targetsFile().isBlank()
+            ? Optional.empty()
+            : Optional.of(Path.of(plan.targetsFile()));
+        for (DiscoveredFile file : WorldFileScanner.discoverTargets(paths, targetsFile)) {
             try {
+                if (FileMigrator.shouldSkipLargeUnknown(file)) {
+                    skipped.add(MigrationPlanner.label(paths, file.path()) + ": skipped large unknown binary file");
+                    continue;
+                }
                 FileChangeResult preview = FileMigrator.preview(file, plan.mappings());
                 if (!preview.changed()) {
                     continue;
                 }
-                backups.backup(file, file, "rewrite");
+                backups.backup(file.path(), file.path(), "rewrite");
                 long replacements = FileMigrator.rewrite(file, plan.mappings());
                 if (replacements > 0) {
-                    changed.add(new PlannedChange(MigrationPlanner.label(paths, file), replacements, "rewrite"));
+                    changed.add(new PlannedChange(MigrationPlanner.label(paths, file.path()), replacements,
+                        "rewrite:" + file.adapter()));
                 }
             } catch (IOException exception) {
-                errors.add(MigrationPlanner.label(paths, file) + ": " + exception.getMessage());
+                errors.add(MigrationPlanner.label(paths, file.path()) + ": " + exception.getMessage());
                 return false;
             }
         }
         return true;
+    }
+
+    private static boolean applySingleplayerPlayerCopy(
+        UuidBridgePaths paths,
+        MigrationPlan plan,
+        BackupManager backups,
+        List<PlannedChange> changed,
+        List<String> skipped,
+        List<String> errors
+    ) throws IOException {
+        SingleplayerPlayerCopy copy = plan.singleplayerPlayerCopy();
+        if (copy == null) {
+            return true;
+        }
+        try {
+            Path source = BackupManager.resolveEntryPath(paths, copy.sourcePath());
+            Path target = BackupManager.resolveEntryPath(paths, copy.targetPath());
+            if (Files.exists(target)) {
+                String message = copy.targetPath() + " target already exists.";
+                skipped.add(message);
+                errors.add(message);
+                return false;
+            }
+            Optional<byte[]> playerData = SingleplayerPlayerExtractor.extractGzipPlayerData(
+                Files.readAllBytes(source), plan.mappings());
+            if (playerData.isEmpty()) {
+                errors.add(copy.sourcePath() + ": Data.Player tag was not found.");
+                return false;
+            }
+            backups.backup(source, target, "singleplayer-player-copy");
+            SafeFileWriter.writeAtomic(target, playerData.get());
+            changed.add(new PlannedChange(copy.sourcePath() + " -> " + copy.targetPath(), 1,
+                "singleplayer-player-copy"));
+            return true;
+        } catch (IOException exception) {
+            errors.add(copy.sourcePath() + ": " + exception.getMessage());
+            return false;
+        }
     }
 
     private static boolean applyRenames(

@@ -7,3 +7,5 @@
   and dedicated server smoke tasks.
 - Add pending apply/rollback recovery workflow with atomic control writes,
   automatic rollback on failed apply, and manual rollback reports.
+- Add identity coverage reporting, semantic JSON/NBT adapters, optional mod
+  target files, and singleplayer `Data.Player` extraction.

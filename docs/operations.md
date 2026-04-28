@@ -62,6 +62,44 @@ provide a mapping file unless `--allow-network` is intentionally enabled.
 - `stats/*.json`
 - `whitelist.json`, `ops.json`, `banned-players.json`, `usercache.json`
 - World `region`, `entities`, `data`, and `level.dat` NBT files
+- Vanilla identity references in NBT and JSON forms, including entity owners,
+  villager gossip targets, custom boss event players, raid saved data, and UUID
+  values in scoreboard data
+- Optional extra JSON/NBT/binary targets declared in `uuidbridge/targets.json`
+
+Scoreboard player names are not rewritten by default. UUIDBridge migrates UUID
+identity references; online/offline UUID migrations do not change player names.
+
+## Optional Targets
+
+Create `uuidbridge/targets.json` when a mod stores claims, teams, permissions,
+or backpack ownership outside the standard world files. See
+`docs/compat/targets.md` for the schema and examples.
+
+Use `--targets <file>` to test a different targets file:
+
+```sh
+uuidbridge scan online-to-offline --targets uuidbridge/targets.json
+uuidbridge plan online-to-offline --targets uuidbridge/targets.json
+```
+
+SQLite, LevelDB, and other transactional databases are reported as unsupported
+for direct writes in this phase. Do not include database files unless a future
+adapter explicitly supports that format.
+
+## Singleplayer World Player Tag
+
+For singleplayer worlds being moved to a dedicated server, `level.dat` may
+contain `Data.Player` instead of a separate `playerdata/<uuid>.dat` file.
+
+```sh
+uuidbridge plan online-to-offline --singleplayer-name Alice
+```
+
+When the target `playerdata/<targetUuid>.dat` does not already exist,
+UUIDBridge copies the embedded player tag into that file during startup
+migration. The original `Data.Player` tag is left in `level.dat` so rollback and
+manual inspection remain straightforward.
 
 ## Runtime Files
 

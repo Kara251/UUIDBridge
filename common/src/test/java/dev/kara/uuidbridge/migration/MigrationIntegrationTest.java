@@ -55,6 +55,10 @@ class MigrationIntegrationTest {
         assertContains(paths.gameDir().resolve("whitelist.json"), OFFLINE_UUID.toString());
         assertContains(paths.worldDir().resolve("advancements").resolve(OFFLINE_UUID + ".json"), OFFLINE_UUID.toString());
         assertGzipContains(paths.worldDir().resolve("playerdata").resolve(OFFLINE_UUID + ".dat"), OFFLINE_UUID.toString());
+        assertGzipContains(paths.worldDir().resolve("data").resolve("scoreboard.dat"), OFFLINE_UUID.toString());
+        assertGzipContains(paths.worldDir().resolve("data").resolve("raids.dat"), OFFLINE_UUID.toString());
+        assertGzipContains(paths.worldDir().resolve("level.dat"), OFFLINE_UUID.toString());
+        assertContains(paths.gameDir().resolve("config").resolve("claims").resolve("alice.json"), OFFLINE_UUID.toString());
         assertRegionContains(paths.worldDir().resolve("entities").resolve("r.0.0.mca"), OFFLINE_UUID.toString());
         assertRegionContains(paths.worldDir().resolve("entities").resolve("r.0.0.mca"), OTHER_UUID.toString());
         assertRegionMissing(paths.worldDir().resolve("entities").resolve("r.0.0.mca"), ONLINE_UUID.toString());
@@ -189,6 +193,47 @@ class MigrationIntegrationTest {
         assertTrue(Files.exists(paths.pendingFile()));
     }
 
+    @Test
+    void copiesSingleplayerPlayerTagWhenExplicitlyPlanned() throws Exception {
+        Path gameDir = tempDir.resolve("singleplayer-server");
+        Path worldDir = gameDir.resolve("world");
+        Files.createDirectories(worldDir);
+        Files.createDirectories(worldDir.resolve("playerdata"));
+        Files.writeString(gameDir.resolve("usercache.json"), """
+            [
+              {
+                "name": "%s",
+                "uuid": "%s"
+              }
+            ]
+            """.formatted(NAME, ONLINE_UUID));
+        Files.write(worldDir.resolve("level.dat"), gzip("""
+            {
+              "Data": {
+                "Player": {
+                  "UUID": "%s",
+                  "InventoryOwner": "%s"
+                }
+              }
+            }
+            """.formatted(ONLINE_UUID, ONLINE_UUID)));
+        UuidBridgePaths paths = UuidBridgePaths.create(gameDir, worldDir);
+        MigrationService service = new MigrationService();
+
+        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE,
+            Optional.empty(), false, Optional.empty(), Optional.of(NAME));
+
+        assertTrue(plan.canApply());
+        assertTrue(plan.singleplayerPlayerCopy() != null);
+        service.markPending(paths, plan.id());
+        MigrationReport report = service.executePending(paths);
+
+        assertTrue(report.successful());
+        assertTrue(Files.exists(worldDir.resolve("playerdata").resolve(OFFLINE_UUID + ".dat")));
+        assertGzipContains(worldDir.resolve("playerdata").resolve(OFFLINE_UUID + ".dat"), OFFLINE_UUID.toString());
+        assertGzipContains(worldDir.resolve("level.dat"), OFFLINE_UUID.toString());
+    }
+
     private UuidBridgePaths fixture(UUID fileUuid, UUID contentUuid, Optional<Path> mappingFile) throws Exception {
         Path gameDir = tempDir.resolve("server");
         Path worldDir = gameDir.resolve("world");
@@ -196,6 +241,9 @@ class MigrationIntegrationTest {
         Files.createDirectories(worldDir.resolve("advancements"));
         Files.createDirectories(worldDir.resolve("stats"));
         Files.createDirectories(worldDir.resolve("entities"));
+        Files.createDirectories(worldDir.resolve("data"));
+        Files.createDirectories(gameDir.resolve("config").resolve("claims"));
+        Files.createDirectories(gameDir.resolve("uuidbridge"));
 
         Files.writeString(gameDir.resolve("usercache.json"), """
             [
@@ -208,9 +256,31 @@ class MigrationIntegrationTest {
         Files.writeString(gameDir.resolve("whitelist.json"), listJson(contentUuid));
         Files.writeString(gameDir.resolve("ops.json"), listJson(contentUuid));
         Files.writeString(gameDir.resolve("banned-players.json"), listJson(contentUuid));
+        Files.writeString(gameDir.resolve("config").resolve("claims").resolve("alice.json"), """
+            {
+              "claimOwner": "%s",
+              "members": ["%s"]
+            }
+            """.formatted(contentUuid, OTHER_UUID));
+        Files.writeString(gameDir.resolve("uuidbridge").resolve("targets.json"), """
+            {
+              "include": [
+                {"path": "config/claims/*.json", "format": "json"}
+              ]
+            }
+            """);
 
         Files.write(worldDir.resolve("playerdata").resolve(fileUuid + ".dat"), gzip("""
             {"Owner":"%s","id":"minecraft:wolf","Other":"%s"}
+            """.formatted(contentUuid, OTHER_UUID)));
+        Files.write(worldDir.resolve("level.dat"), gzip("""
+            {"Data":{"CustomBossEvents":{"uuidbridge:test":{"Players":["%s"]}}}}
+            """.formatted(contentUuid)));
+        Files.write(worldDir.resolve("data").resolve("scoreboard.dat"), gzip("""
+            {"data":{"Objectives":[{"Name":"Alice","Owner":"%s"}]}}
+            """.formatted(contentUuid)));
+        Files.write(worldDir.resolve("data").resolve("raids.dat"), gzip("""
+            {"HeroesOfTheVillage":["%s"],"Random":"%s"}
             """.formatted(contentUuid, OTHER_UUID)));
         Files.writeString(worldDir.resolve("advancements").resolve(fileUuid + ".json"), """
             {"criteria":{"uuid":"%s","other":"%s"}}

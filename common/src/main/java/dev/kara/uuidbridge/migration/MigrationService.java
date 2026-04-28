@@ -20,8 +20,20 @@ public final class MigrationService {
         Optional<String> mapping,
         boolean allowNetwork
     ) throws IOException {
+        return scan(paths, direction, mapping, allowNetwork, Optional.empty(), Optional.empty());
+    }
+
+    public ScanResult scan(
+        UuidBridgePaths paths,
+        MigrationDirection direction,
+        Optional<String> mapping,
+        boolean allowNetwork,
+        Optional<String> targets,
+        Optional<String> singleplayerName
+    ) throws IOException {
         Optional<Path> mappingFile = resolveMapping(paths, mapping);
-        return planner.scan(paths, direction, mappingFile, allowNetwork);
+        Optional<Path> targetsFile = resolveControlFile(paths, targets);
+        return planner.scan(paths, direction, mappingFile, allowNetwork, targetsFile, singleplayerName);
     }
 
     public MigrationPlan createPlan(
@@ -30,8 +42,21 @@ public final class MigrationService {
         Optional<String> mapping,
         boolean allowNetwork
     ) throws IOException {
+        return createPlan(paths, direction, mapping, allowNetwork, Optional.empty(), Optional.empty());
+    }
+
+    public MigrationPlan createPlan(
+        UuidBridgePaths paths,
+        MigrationDirection direction,
+        Optional<String> mapping,
+        boolean allowNetwork,
+        Optional<String> targets,
+        Optional<String> singleplayerName
+    ) throws IOException {
         Optional<Path> mappingFile = resolveMapping(paths, mapping);
-        MigrationPlan plan = planner.createPlan(paths, direction, mappingFile, allowNetwork);
+        Optional<Path> targetsFile = resolveControlFile(paths, targets);
+        MigrationPlan plan = planner.createPlan(paths, direction, mappingFile, allowNetwork,
+            targetsFile, singleplayerName);
         JsonCodecs.write(paths.planPath(plan.id()), plan);
         return plan;
     }
@@ -110,6 +135,14 @@ public final class MigrationService {
         return Optional.of(JsonCodecs.read(manifest, BackupManifest.class));
     }
 
+    public Optional<MigrationPlan> plan(UuidBridgePaths paths, String planId) throws IOException {
+        Path planPath = paths.planPath(planId);
+        if (!Files.isRegularFile(planPath)) {
+            return Optional.empty();
+        }
+        return Optional.of(JsonCodecs.read(planPath, MigrationPlan.class));
+    }
+
     public boolean cancel(UuidBridgePaths paths, String planId) throws IOException {
         if (hasLock(paths)) {
             throw new IOException("Cannot cancel while migration.lock is present; inspect status and resolve recovery first.");
@@ -143,6 +176,13 @@ public final class MigrationService {
             return Optional.empty();
         }
         return Optional.of(PathSecurity.resolveInside(paths.gameDir(), mapping.get()));
+    }
+
+    private static Optional<Path> resolveControlFile(UuidBridgePaths paths, Optional<String> file) throws IOException {
+        if (file.isEmpty() || file.get().isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(PathSecurity.resolveInside(paths.gameDir(), file.get()));
     }
 
     private static Path reportPath(UuidBridgePaths paths, MigrationReport report) {

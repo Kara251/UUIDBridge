@@ -1,43 +1,53 @@
 package dev.kara.uuidbridge.migration;
 
 import dev.kara.uuidbridge.migration.io.SafeFileWriter;
-import dev.kara.uuidbridge.migration.rewrite.RegionFileRewriter;
-import dev.kara.uuidbridge.migration.rewrite.UuidReplacementEngine;
+import dev.kara.uuidbridge.migration.adapter.DataAdapter;
+import dev.kara.uuidbridge.migration.adapter.DataAdapters;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Locale;
 
 public final class FileMigrator {
     private FileMigrator() {
     }
 
     public static FileChangeResult preview(Path file, List<UuidMapping> mappings) throws IOException {
+        return preview(new DiscoveredFile(file, DataAdapters.forFile(file).id(),
+            DataAdapters.forFile(file).format(), "legacy", false), mappings);
+    }
+
+    public static FileChangeResult preview(DiscoveredFile file, List<UuidMapping> mappings) throws IOException {
         return rewriteBytes(file, mappings);
     }
 
     public static long rewrite(Path file, List<UuidMapping> mappings) throws IOException {
+        return rewrite(new DiscoveredFile(file, DataAdapters.forFile(file).id(),
+            DataAdapters.forFile(file).format(), "legacy", false), mappings);
+    }
+
+    public static long rewrite(DiscoveredFile file, List<UuidMapping> mappings) throws IOException {
         FileChangeResult result = rewriteBytes(file, mappings);
         if (result.changed()) {
-            SafeFileWriter.writeAtomic(file, result.content());
+            SafeFileWriter.writeAtomic(file.path(), result.content());
         }
         return result.replacements();
     }
 
-    private static FileChangeResult rewriteBytes(Path file, List<UuidMapping> mappings) throws IOException {
-        byte[] content = Files.readAllBytes(file);
-        String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
-        if (name.endsWith(".mca")) {
-            return RegionFileRewriter.rewrite(content, mappings);
+    public static boolean shouldSkipLargeUnknown(DiscoveredFile file) throws IOException {
+        if (file.explicit()) {
+            return false;
         }
-        if (name.endsWith(".dat") || name.endsWith(".dat_old")) {
-            try {
-                return UuidReplacementEngine.rewriteGzip(content, mappings);
-            } catch (IOException ignored) {
-                return UuidReplacementEngine.rewritePlain(content, mappings);
-            }
+        return DataAdapters.BINARY.equals(file.adapter())
+            && Files.size(file.path()) > DataAdapters.DEFAULT_BINARY_SIZE_LIMIT;
+    }
+
+    private static FileChangeResult rewriteBytes(DiscoveredFile file, List<UuidMapping> mappings) throws IOException {
+        if (shouldSkipLargeUnknown(file)) {
+            return new FileChangeResult(0, new byte[0]);
         }
-        return UuidReplacementEngine.rewritePlain(content, mappings);
+        DataAdapter adapter = DataAdapters.byId(file.adapter())
+            .orElseGet(() -> DataAdapters.forFile(file.path()));
+        return adapter.rewrite(Files.readAllBytes(file.path()), mappings);
     }
 }

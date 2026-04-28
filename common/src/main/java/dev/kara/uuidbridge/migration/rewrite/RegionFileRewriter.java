@@ -54,7 +54,7 @@ public final class RegionFileRewriter {
             byte compression = region[byteOffset + 4];
             byte[] compressed = Arrays.copyOfRange(region, byteOffset + 5, byteOffset + 4 + chunkLength);
             byte[] payload = decompress(compressed, compression);
-            FileChangeResult result = UuidReplacementEngine.rewritePlain(payload, mappings);
+            FileChangeResult result = NbtIdentityRewriter.rewriteOrFallback(payload, mappings);
             if (!result.changed()) {
                 rewrittenChunks[index] = Arrays.copyOfRange(region, byteOffset, byteOffset + 4 + chunkLength);
                 continue;
