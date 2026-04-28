@@ -40,6 +40,10 @@ public final class MigrationService {
         if (!Files.isRegularFile(planPath)) {
             throw new IOException("Plan not found: " + planId);
         }
+        MigrationPlan plan = JsonCodecs.read(planPath, MigrationPlan.class);
+        if (!plan.canApply()) {
+            throw new IOException("Plan cannot be applied until conflicts and missing mappings are fixed: " + planId);
+        }
         PendingPlan pending = new PendingPlan(planId);
         JsonCodecs.write(paths.pendingFile(), pending);
     }
@@ -61,6 +65,10 @@ public final class MigrationService {
         }
     }
 
+    public boolean hasLock(UuidBridgePaths paths) {
+        return Files.exists(paths.controlDir().resolve("migration.lock"));
+    }
+
     public boolean cancel(UuidBridgePaths paths, String planId) throws IOException {
         Optional<String> pending = pendingPlan(paths);
         if (pending.isPresent() && pending.get().equals(planId)) {
@@ -74,10 +82,10 @@ public final class MigrationService {
         String planId = pendingPlan(paths).orElseThrow(() -> new IOException("No pending migration plan."));
         MigrationPlan plan = JsonCodecs.read(paths.planPath(planId), MigrationPlan.class);
         MigrationReport report = executor.execute(paths, plan);
-        Files.deleteIfExists(paths.pendingFile());
         if (!report.successful()) {
             throw new IOException("UUIDBridge migration completed with errors. See " + paths.reportPath(planId));
         }
+        Files.deleteIfExists(paths.pendingFile());
         return report;
     }
 

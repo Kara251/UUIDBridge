@@ -4,8 +4,28 @@ plugins {
     id "com.gradleup.shadow" version "8.3.6" apply false
 }
 
+import java.util.concurrent.TimeUnit
+
 architectury {
     minecraft = minecraft_version
+}
+
+repositories {
+    mavenCentral()
+    maven { url "https://maven.architectury.dev/" }
+    maven { url "https://maven.fabricmc.net/" }
+    maven { url "https://maven.minecraftforge.net/" }
+    maven { url "https://maven.neoforged.net/releases/" }
+}
+
+configurations {
+    forgeServerInstaller
+    neoforgeServerInstaller
+}
+
+dependencies {
+    forgeServerInstaller "net.minecraftforge:forge:${minecraft_version}-${forge_version}:installer"
+    neoforgeServerInstaller "net.neoforged:neoforge:${neoforge_version}:installer"
 }
 
 subprojects {
@@ -75,4 +95,289 @@ tasks.register("stageModJars", Sync) {
 
 tasks.named("assemble") {
     dependsOn "stageModJars"
+}
+
+def javaExecutable() {
+    return javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(rootProject.java_version as int)
+    }.get().executablePath.asFile
+}
+
+def prepareSmokeRunDir(String projectName) {
+    File runDir = layout.buildDirectory.dir("smoke/${projectName}").get().asFile
+    delete runDir
+    runDir.mkdirs()
+    new File(runDir, "eula.txt").text = "eula=true\n"
+    new File(runDir, "server.properties").text = """
+        server-port=0
+        online-mode=false
+        enable-command-block=false
+        motd=UUIDBridge smoke server
+        max-tick-time=60000
+        """.stripIndent().trim() + "\n"
+    return runDir
+}
+
+def appendProcessOutput(StringBuilder output, String line) {
+    output.append(line).append(System.lineSeparator())
+    int maxOutputChars = 120_000
+    if (output.length() > maxOutputChars) {
+        output.delete(0, output.length() - maxOutputChars)
+    }
+}
+
+def shouldLogProcessLine(String line, boolean verbose) {
+    return verbose
+        || line.contains("successfully")
+        || line.startsWith("JVM info:")
+        || line.startsWith("Target Directory:")
+        || line.contains("FAILED")
+        || line.contains("ERROR")
+        || line.startsWith("Exception in thread")
+}
+
+def collectProcessOutput(String label, Process process, long timeoutNanos, boolean verbose = true) {
+    StringBuilder output = new StringBuilder()
+    long deadline = System.nanoTime() + timeoutNanos
+
+    try {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.inputStream, java.nio.charset.StandardCharsets.UTF_8))
+        while (System.nanoTime() < deadline) {
+            while (reader.ready()) {
+                String line = reader.readLine()
+                if (line == null) {
+                    break
+                }
+                if (shouldLogProcessLine(line, verbose)) {
+                    logger.lifecycle(line)
+                }
+                appendProcessOutput(output, line)
+            }
+
+            if (process.waitFor(300, TimeUnit.MILLISECONDS)) {
+                while (reader.ready()) {
+                    String line = reader.readLine()
+                    if (line == null) {
+                        break
+                    }
+                    if (shouldLogProcessLine(line, verbose)) {
+                        logger.lifecycle(line)
+                    }
+                    appendProcessOutput(output, line)
+                }
+                if (process.exitValue() != 0) {
+                    throw new GradleException("${label} exited with ${process.exitValue()}.\n${output}")
+                }
+                return output.toString()
+            }
+        }
+
+        throw new GradleException("${label} timed out.\n${output}")
+    } finally {
+        if (process.isAlive()) {
+            process.destroy()
+            process.waitFor(10, TimeUnit.SECONDS)
+        }
+        if (process.isAlive()) {
+            process.destroyForcibly()
+        }
+    }
+}
+
+def runServerSmoke(String projectName, File workDir, List<String> command) {
+    Process process = new ProcessBuilder(command.collect { it.toString() })
+        .directory(workDir)
+        .redirectErrorStream(true)
+        .start()
+
+    StringBuilder output = new StringBuilder()
+    boolean started = false
+    boolean commandSent = false
+    boolean statusSeen = false
+    boolean stopSent = false
+    boolean fatalSeen = false
+    boolean wrapperStoppedAfterVerifiedShutdown = false
+    long commandSentAt = 0L
+    long stopSentAt = 0L
+    long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(5)
+    InputStream serverOutput = process.inputStream
+    StringBuilder pendingLine = new StringBuilder()
+
+    def handleServerLine = { String line ->
+        logger.lifecycle(line)
+        appendProcessOutput(output, line)
+        if (line.contains("Done (") || line.contains("Done(")) {
+            started = true
+        }
+        if (line.contains("UUIDBridge pending plan:")) {
+            statusSeen = true
+        }
+        if (line.contains("Exception in thread \"main\"") || line.contains("java.lang.module.") || line.contains("Failed to start the minecraft server")) {
+            fatalSeen = true
+        }
+    }
+
+    def drainServerOutput = {
+        byte[] buffer = new byte[8192]
+        while (serverOutput.available() > 0) {
+            int readable = Math.min(buffer.length, serverOutput.available())
+            int read = serverOutput.read(buffer, 0, readable)
+            if (read < 0) {
+                break
+            }
+            String chunk = new String(buffer, 0, read, java.nio.charset.StandardCharsets.UTF_8)
+            for (int index = 0; index < chunk.length(); index++) {
+                char character = chunk.charAt(index)
+                if (character == '\n' as char) {
+                    handleServerLine(pendingLine.toString())
+                    pendingLine.setLength(0)
+                } else if (character != '\r' as char) {
+                    pendingLine.append(character)
+                }
+            }
+        }
+    }
+
+    try {
+        while (System.nanoTime() < deadline) {
+            drainServerOutput()
+
+            if (fatalSeen) {
+                throw new GradleException("${projectName} server smoke saw a fatal startup error.\n${output}")
+            }
+
+            if (started && !commandSent) {
+                process.outputStream.write("uuidbridge status\n".getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                process.outputStream.flush()
+                commandSent = true
+                commandSentAt = System.nanoTime()
+            }
+
+            if (statusSeen && !stopSent) {
+                process.outputStream.write("stop\n".getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                process.outputStream.flush()
+                process.outputStream.close()
+                stopSent = true
+                stopSentAt = System.nanoTime()
+            }
+
+            if (process.waitFor(300, TimeUnit.MILLISECONDS)) {
+                break
+            }
+
+            if (stopSent && System.nanoTime() - stopSentAt > TimeUnit.SECONDS.toNanos(15)) {
+                process.destroy()
+                process.waitFor(10, TimeUnit.SECONDS)
+                if (process.isAlive()) {
+                    process.destroyForcibly()
+                    process.waitFor(10, TimeUnit.SECONDS)
+                }
+                wrapperStoppedAfterVerifiedShutdown = true
+                break
+            }
+
+            if (commandSent && !statusSeen && System.nanoTime() - commandSentAt > TimeUnit.SECONDS.toNanos(20)) {
+                throw new GradleException("${projectName} server did not print uuidbridge status output.\n${output}")
+            }
+        }
+    } finally {
+        if (process.isAlive()) {
+            try {
+                process.outputStream.write("stop\n".getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                process.outputStream.flush()
+                process.waitFor(10, TimeUnit.SECONDS)
+            } catch (IOException ignored) {
+                // Fall through to forced shutdown.
+            }
+            if (process.isAlive()) {
+                process.destroy()
+                process.waitFor(10, TimeUnit.SECONDS)
+            }
+            if (process.isAlive()) {
+                process.destroyForcibly()
+            }
+        }
+    }
+
+    if (!started) {
+        throw new GradleException("${projectName} server smoke did not reach Done.\n${output}")
+    }
+    if (!statusSeen) {
+        throw new GradleException("${projectName} server smoke did not verify uuidbridge status.\n${output}")
+    }
+    if (!wrapperStoppedAfterVerifiedShutdown && process.exitValue() != 0) {
+        throw new GradleException("${projectName} server smoke exited with ${process.exitValue()}.\n${output}")
+    }
+}
+
+def registerDevServerSmokeTask(String projectName) {
+    tasks.register("${projectName}ServerSmoke") {
+        group = "verification"
+        description = "Starts the ${projectName} dedicated server, runs uuidbridge status, then stops it."
+
+        doLast {
+            File runDir = prepareSmokeRunDir(projectName)
+            File gradlew = layout.projectDirectory.file("gradlew").asFile
+            String runDirProperty = "../build/smoke/${projectName}"
+            runServerSmoke(projectName, layout.projectDirectory.asFile, [
+                gradlew.absolutePath,
+                "-p",
+                layout.projectDirectory.asFile.absolutePath,
+                "--no-daemon",
+                "-PuuidbridgeSmokeRunDir=${runDirProperty}",
+                ":${projectName}:runServer"
+            ])
+        }
+    }
+}
+
+def registerInstalledServerSmokeTask(String projectName, String installerConfigurationName, String argsFileRelativePath) {
+    tasks.register("${projectName}ServerSmoke") {
+        group = "verification"
+        description = "Installs and starts the ${projectName} dedicated server with the remapped UUIDBridge jar."
+        dependsOn project(":${projectName}").tasks.named("remapJar")
+        inputs.files(configurations.named(installerConfigurationName))
+        inputs.file(project(":${projectName}").tasks.named("remapJar").flatMap { it.archiveFile })
+
+        doLast {
+            File runDir = prepareSmokeRunDir(projectName)
+            File installerJar = configurations.named(installerConfigurationName).get().singleFile
+            File javaExe = javaExecutable()
+
+            Process installer = new ProcessBuilder(javaExe.absolutePath, "-jar", installerJar.absolutePath, "--installServer")
+                .directory(runDir)
+                .redirectErrorStream(true)
+                .start()
+            collectProcessOutput("${projectName} server installer", installer, TimeUnit.MINUTES.toNanos(5), false)
+
+            File argsFile = new File(runDir, argsFileRelativePath)
+            if (!argsFile.isFile()) {
+                throw new GradleException("${projectName} server installer did not create ${argsFileRelativePath}.")
+            }
+
+            File modsDir = new File(runDir, "mods")
+            modsDir.mkdirs()
+            copy {
+                from project(":${projectName}").tasks.named("remapJar").get().archiveFile
+                into modsDir
+            }
+
+            runServerSmoke(projectName, runDir, [
+                javaExe.absolutePath,
+                "-Xmx1G",
+                "@${argsFile.absolutePath}",
+                "nogui"
+            ])
+        }
+    }
+}
+
+registerDevServerSmokeTask("fabric")
+registerInstalledServerSmokeTask("forge", "forgeServerInstaller", "libraries/net/minecraftforge/forge/${minecraft_version}-${forge_version}/unix_args.txt")
+registerInstalledServerSmokeTask("neoforge", "neoforgeServerInstaller", "libraries/net/neoforged/neoforge/${neoforge_version}/unix_args.txt")
+
+tasks.register("smokeServerAll") {
+    group = "verification"
+    description = "Runs dedicated server smoke tests for Fabric, Forge, and NeoForge."
+    dependsOn "fabricServerSmoke", "forgeServerSmoke", "neoforgeServerSmoke"
 }

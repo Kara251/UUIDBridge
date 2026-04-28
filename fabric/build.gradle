@@ -27,6 +27,8 @@ dependencies {
     }
 }
 
+def smokeRunDir = providers.gradleProperty("uuidbridgeSmokeRunDir").orNull
+
 loom {
     runs {
         client {
@@ -37,7 +39,7 @@ loom {
         server {
             server()
             configName = "UUIDBridge Fabric Server"
-            runDir "run/fabric-server"
+            runDir smokeRunDir ?: "run/fabric-server"
         }
     }
 }

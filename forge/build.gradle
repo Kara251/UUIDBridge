@@ -7,6 +7,8 @@ architectury {
     forge()
 }
 
+def smokeRunDir = providers.gradleProperty("uuidbridgeSmokeRunDir").orNull
+
 loom {
     forge {
         convertAccessWideners = true
@@ -20,7 +22,7 @@ loom {
         server {
             server()
             configName = "UUIDBridge Forge Server"
-            runDir "run/forge-server"
+            runDir smokeRunDir ?: "run/forge-server"
         }
     }
 }

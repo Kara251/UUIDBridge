@@ -56,14 +56,20 @@ public final class UuidBridgeCommands {
             CommandOptions options = CommandOptions.parse(rawOptions);
             MigrationDirection direction = MigrationDirection.parse(directionValue);
             ScanResult result = SERVICE.scan(paths(source), direction, options.mapping(), options.allowNetwork());
-            send(source, "UUIDBridge scan: " + result.knownPlayers() + " known players, "
-                + result.mappings() + " mappings, " + result.estimatedChanges().size()
-                + " files with estimated changes.");
+            long replacements = result.estimatedChanges().stream()
+                .mapToLong(change -> change.replacements())
+                .sum();
+            send(source, "UUIDBridge scan: players=" + result.knownPlayers()
+                + ", mappings=" + result.mappings()
+                + ", filesWithChanges=" + result.estimatedChanges().size()
+                + ", estimatedReplacements=" + replacements + ".");
             if (!result.conflicts().isEmpty()) {
-                send(source, "Conflicts: " + result.conflicts().size());
+                send(source, "Conflicts: " + result.conflicts().size()
+                    + " target UUID collision(s); inspect the generated mapping inputs.");
             }
             if (!result.missingMappings().isEmpty()) {
-                send(source, "Missing mappings: " + result.missingMappings().size());
+                send(source, "Missing mappings: " + result.missingMappings().size()
+                    + "; provide --mapping <file> or use --allow-network when appropriate.");
             }
             return result.conflicts().isEmpty() && result.missingMappings().isEmpty() ? 1 : 0;
         } catch (Exception exception) {
@@ -78,14 +84,18 @@ public final class UuidBridgeCommands {
             MigrationDirection direction = MigrationDirection.parse(directionValue);
             MigrationPlan plan = SERVICE.createPlan(paths(source), direction, options.mapping(), options.allowNetwork());
             send(source, "UUIDBridge plan created: " + plan.id());
+            long replacements = plan.estimatedChanges().stream()
+                .mapToLong(change -> change.replacements())
+                .sum();
             send(source, "Mappings: " + plan.mappings().size()
-                + ", estimated changes: " + plan.estimatedChanges().size()
+                + ", filesWithChanges: " + plan.estimatedChanges().size()
+                + ", estimatedReplacements: " + replacements
                 + ", conflicts: " + plan.conflicts().size()
                 + ", missing: " + plan.missingMappings().size());
             if (plan.canApply()) {
                 send(source, "Use /uuidbridge apply " + plan.id() + " --confirm, then restart the server.");
             } else {
-                send(source, "Plan is not applyable until conflicts and missing mappings are fixed.");
+                send(source, "Plan cannot be applied: fix conflicts and missing mappings first.");
             }
             return plan.canApply() ? 1 : 0;
         } catch (Exception exception) {
@@ -118,6 +128,7 @@ public final class UuidBridgeCommands {
             Optional<Path> latestReport = SERVICE.latestReport(paths);
             send(source, "UUIDBridge pending plan: " + pending.orElse("none"));
             send(source, "UUIDBridge latest report: " + latestReport.map(Path::toString).orElse("none"));
+            send(source, "UUIDBridge migration lock: " + (SERVICE.hasLock(paths) ? "present" : "none"));
             return pending.isPresent() || latestReport.isPresent() ? 1 : 0;
         } catch (Exception exception) {
             fail(source, exception);

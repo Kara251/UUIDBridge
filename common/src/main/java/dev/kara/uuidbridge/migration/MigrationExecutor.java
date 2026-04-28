@@ -31,26 +31,43 @@ public final class MigrationExecutor {
         List<String> skipped = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         BackupManager backups = new BackupManager(paths, plan.id());
+        MigrationReport report;
 
         try {
             applyRewrites(paths, plan, backups, changed, errors);
             applyRenames(paths, plan, backups, changed, skipped, errors);
-        } finally {
-            Files.deleteIfExists(lock);
+            report = new MigrationReport(
+                plan.id(),
+                plan.direction(),
+                List.copyOf(changed),
+                List.copyOf(skipped),
+                List.copyOf(errors),
+                backups.root().toString(),
+                checksum(changed, skipped, errors),
+                Instant.now().toString()
+            );
+            JsonCodecs.write(paths.reportPath(plan.id()), report);
+            backups.writeManifest(report.successful());
+            if (report.successful()) {
+                Files.deleteIfExists(lock);
+            }
+            return report;
+        } catch (IOException | RuntimeException exception) {
+            errors.add("fatal: " + exception.getMessage());
+            report = new MigrationReport(
+                plan.id(),
+                plan.direction(),
+                List.copyOf(changed),
+                List.copyOf(skipped),
+                List.copyOf(errors),
+                backups.root().toString(),
+                checksum(changed, skipped, errors),
+                Instant.now().toString()
+            );
+            JsonCodecs.write(paths.reportPath(plan.id()), report);
+            backups.writeManifest(false);
+            throw exception;
         }
-
-        MigrationReport report = new MigrationReport(
-            plan.id(),
-            plan.direction(),
-            List.copyOf(changed),
-            List.copyOf(skipped),
-            List.copyOf(errors),
-            backups.root().toString(),
-            checksum(changed, skipped, errors),
-            Instant.now().toString()
-        );
-        JsonCodecs.write(paths.reportPath(plan.id()), report);
-        return report;
     }
 
     private static void applyRewrites(
@@ -92,7 +109,9 @@ public final class MigrationExecutor {
             }
             Path target = file.resolveSibling(newName);
             if (Files.exists(target)) {
-                skipped.add(MigrationPlanner.label(paths, file) + " target already exists: " + target.getFileName());
+                String message = MigrationPlanner.label(paths, file) + " target already exists: " + target.getFileName();
+                skipped.add(message);
+                errors.add(message);
                 continue;
             }
             try {
