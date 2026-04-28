@@ -16,6 +16,8 @@ client UI.
 3. Run `/uuidbridge apply <planId> --confirm`.
 4. Restart the server. UUIDBridge applies the pending plan before normal play,
    writes a report, and keeps backups.
+5. To undo a completed migration, run `/uuidbridge rollback <planId> --confirm`
+   and restart again.
 
 ## Panel Server Workflow
 
@@ -34,8 +36,9 @@ have a console, file manager, and restart button, but not a full shell.
    during startup before normal play.
 
 Do not force-stop the server during the startup migration unless the panel is
-already stuck. If a migration fails, UUIDBridge keeps the pending file, lock,
-report, and backup manifest for diagnosis.
+already stuck. If an apply fails, UUIDBridge attempts to restore changed files
+from the backup manifest before stopping startup. If recovery also fails, it
+keeps the pending file, lock, report, and backup manifest for diagnosis.
 
 ## Mapping Files
 
@@ -75,17 +78,32 @@ provide a mapping file unless `--allow-network` is intentionally enabled.
 Runtime files are written under `uuidbridge/` in the server root:
 
 - `plans/<planId>.json`
-- `pending.json`
+- `pending.json`, containing either an `apply` or `rollback` action
+- `migration.lock`, present only while startup recovery work is active
 - `reports/<planId>.json`
+- `reports/<planId>-rollback.json`
 - `backups/<planId>/manifest.json`
+- `backups/<planId>/rollback-current/`, created before manual rollback
+  overwrites current files
 
-On success, `pending.json` and `migration.lock` are removed. On failure, they
-remain in place with the report and backup manifest so the failed migration can
-be inspected before another attempt.
+On successful apply or rollback, `pending.json` and `migration.lock` are
+removed. If apply fails and automatic rollback succeeds, `pending.json` remains
+so the administrator can inspect the report before retrying or canceling; the
+lock is removed because the world has been restored. If rollback fails, both
+`pending.json` and `migration.lock` remain and startup is stopped.
 
-To roll back manually, stop the server and copy files from
-`uuidbridge/backups/<planId>/` back to the original paths shown in
-`manifest.json`.
+Manual rollback is also available after a successful migration:
+
+```sh
+uuidbridge rollback <planId> --confirm
+```
+
+Restart the server after marking rollback pending. UUIDBridge restores files
+from `manifest.json`; before overwriting current files it saves them under
+`rollback-current/`.
+
+Use `uuidbridge status` to inspect the pending action, latest report,
+`migration.lock`, and backup manifest state.
 
 ## Development
 

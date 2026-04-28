@@ -209,7 +209,7 @@ def runServerSmoke(String projectName, File workDir, List<String> command) {
         if (line.contains("Done (") || line.contains("Done(")) {
             started = true
         }
-        if (line.contains("UUIDBridge pending plan:")) {
+        if (line.contains("UUIDBridge pending plan:") || line.contains("UUIDBridge pending:")) {
             statusSeen = true
         }
         if (line.contains("Exception in thread \"main\"") || line.contains("java.lang.module.") || line.contains("Failed to start the minecraft server")) {

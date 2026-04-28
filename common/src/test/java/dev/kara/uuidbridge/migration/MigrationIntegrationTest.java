@@ -11,6 +11,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.zip.DeflaterOutputStream;
@@ -42,6 +44,10 @@ class MigrationIntegrationTest {
         MigrationReport report = service.executePending(paths);
 
         assertTrue(report.successful());
+        assertEquals(PendingAction.APPLY, report.action());
+        assertEquals("APPLIED", report.finalState());
+        assertTrue(report.applyErrors().isEmpty());
+        assertTrue(report.rollbackErrors().isEmpty());
         assertFalse(Files.exists(paths.pendingFile()));
         assertFalse(service.hasLock(paths));
         assertTrue(Files.exists(paths.worldDir().resolve("playerdata").resolve(OFFLINE_UUID + ".dat")));
@@ -56,6 +62,8 @@ class MigrationIntegrationTest {
         BackupManifest manifest = JsonCodecs.read(Path.of(report.backupPath()).resolve("manifest.json"), BackupManifest.class);
         assertTrue(manifest.complete());
         assertTrue(manifest.files().stream().anyMatch(entry -> entry.originalPath().contains("playerdata")));
+        assertTrue(manifest.files().stream().allMatch(entry -> !entry.originalSha256().isBlank()));
+        assertTrue(manifest.files().stream().allMatch(entry -> !entry.backupSha256().isBlank()));
     }
 
     @Test
@@ -77,7 +85,30 @@ class MigrationIntegrationTest {
     }
 
     @Test
-    void keepsPendingLockAndReportWhenTargetFileAlreadyExists() throws Exception {
+    void manuallyRollsBackSuccessfulMigrationAndProtectsCurrentFiles() throws Exception {
+        UuidBridgePaths paths = fixture(ONLINE_UUID, ONLINE_UUID, Optional.empty());
+        MigrationService service = new MigrationService();
+        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty(), false);
+
+        service.markPending(paths, plan.id());
+        assertTrue(service.executePending(paths).successful());
+        assertTrue(Files.exists(paths.worldDir().resolve("playerdata").resolve(OFFLINE_UUID + ".dat")));
+
+        service.markPendingRollback(paths, plan.id(), "test");
+        MigrationReport rollback = service.executePending(paths);
+
+        assertTrue(rollback.successful());
+        assertEquals(PendingAction.ROLLBACK, rollback.action());
+        assertEquals("ROLLED_BACK", rollback.finalState());
+        assertTrue(Files.exists(paths.worldDir().resolve("playerdata").resolve(ONLINE_UUID + ".dat")));
+        assertFalse(Files.exists(paths.worldDir().resolve("playerdata").resolve(OFFLINE_UUID + ".dat")));
+        assertContains(paths.gameDir().resolve("whitelist.json"), ONLINE_UUID.toString());
+        assertGzipContains(paths.worldDir().resolve("playerdata").resolve(ONLINE_UUID + ".dat"), ONLINE_UUID.toString());
+        assertTrue(hasAnyFile(paths.backupPath(plan.id()).resolve("rollback-current")));
+    }
+
+    @Test
+    void failedApplyAutomaticallyRollsBackAndKeepsPendingReport() throws Exception {
         UuidBridgePaths paths = fixture(ONLINE_UUID, ONLINE_UUID, Optional.empty());
         MigrationService service = new MigrationService();
         MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty(), false);
@@ -88,9 +119,14 @@ class MigrationIntegrationTest {
         MigrationReport report = JsonCodecs.read(paths.reportPath(plan.id()), MigrationReport.class);
 
         assertFalse(report.successful());
+        assertEquals("ROLLED_BACK", report.finalState());
+        assertFalse(report.applyErrors().isEmpty());
+        assertTrue(report.rollbackErrors().isEmpty());
         assertTrue(Files.exists(paths.pendingFile()));
-        assertTrue(service.hasLock(paths));
+        assertFalse(service.hasLock(paths));
         assertTrue(Files.exists(paths.reportPath(plan.id())));
+        assertTrue(Files.exists(paths.worldDir().resolve("playerdata").resolve(ONLINE_UUID + ".dat")));
+        assertContains(paths.gameDir().resolve("whitelist.json"), ONLINE_UUID.toString());
         BackupManifest manifest = JsonCodecs.read(paths.backupPath(plan.id()).resolve("manifest.json"), BackupManifest.class);
         assertFalse(manifest.complete());
     }
@@ -107,10 +143,50 @@ class MigrationIntegrationTest {
         MigrationReport report = JsonCodecs.read(paths.reportPath(plan.id()), MigrationReport.class);
 
         assertFalse(report.successful());
+        assertEquals("ROLLED_BACK", report.finalState());
         assertTrue(report.errors().stream().anyMatch(error -> error.contains("r.1.0.mca")));
-        assertTrue(Files.exists(paths.worldDir().resolve("playerdata").resolve(OFFLINE_UUID + ".dat")));
+        assertTrue(Files.exists(paths.worldDir().resolve("playerdata").resolve(ONLINE_UUID + ".dat")));
+        assertFalse(Files.exists(paths.worldDir().resolve("playerdata").resolve(OFFLINE_UUID + ".dat")));
+        assertContains(paths.gameDir().resolve("whitelist.json"), ONLINE_UUID.toString());
+        assertTrue(Files.exists(paths.pendingFile()));
+        assertFalse(service.hasLock(paths));
+    }
+
+    @Test
+    void corruptedBackupMakesManualRollbackKeepPendingLockAndReport() throws Exception {
+        UuidBridgePaths paths = fixture(ONLINE_UUID, ONLINE_UUID, Optional.empty());
+        MigrationService service = new MigrationService();
+        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty(), false);
+        service.markPending(paths, plan.id());
+        assertTrue(service.executePending(paths).successful());
+
+        BackupManifest manifest = JsonCodecs.read(paths.backupPath(plan.id()).resolve("manifest.json"), BackupManifest.class);
+        BackupEntry first = manifest.files().getFirst();
+        Files.writeString(paths.backupPath(plan.id()).resolve(first.backupPath()), "corrupted");
+
+        service.markPendingRollback(paths, plan.id(), "test");
+        assertThrows(java.io.IOException.class, () -> service.executePending(paths));
+        MigrationReport report = JsonCodecs.read(paths.reportPath(plan.id() + "-rollback"), MigrationReport.class);
+
+        assertFalse(report.successful());
+        assertEquals(PendingAction.ROLLBACK, report.action());
+        assertEquals("ROLLBACK_FAILED", report.finalState());
+        assertFalse(report.rollbackErrors().isEmpty());
         assertTrue(Files.exists(paths.pendingFile()));
         assertTrue(service.hasLock(paths));
+    }
+
+    @Test
+    void cancelIsRejectedWhenLockExists() throws Exception {
+        UuidBridgePaths paths = fixture(ONLINE_UUID, ONLINE_UUID, Optional.empty());
+        MigrationService service = new MigrationService();
+        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty(), false);
+        service.markPending(paths, plan.id());
+        JsonCodecs.write(paths.controlDir().resolve("migration.lock"),
+            new MigrationLock(PendingAction.APPLY, plan.id(), "now"));
+
+        assertThrows(java.io.IOException.class, () -> service.cancel(paths, plan.id()));
+        assertTrue(Files.exists(paths.pendingFile()));
     }
 
     private UuidBridgePaths fixture(UUID fileUuid, UUID contentUuid, Optional<Path> mappingFile) throws Exception {
@@ -239,5 +315,21 @@ class MigrationIntegrationTest {
             deflater.write(payload);
         }
         return output.toByteArray();
+    }
+
+    private static boolean hasAnyFile(Path directory) throws Exception {
+        if (!Files.isDirectory(directory)) {
+            return false;
+        }
+        try (var stream = Files.walk(directory)) {
+            return stream.anyMatch(Files::isRegularFile);
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private static String sha256(Path file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        digest.update(Files.readAllBytes(file));
+        return HexFormat.of().formatHex(digest.digest());
     }
 }

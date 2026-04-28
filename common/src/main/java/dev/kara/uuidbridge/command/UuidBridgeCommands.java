@@ -3,9 +3,12 @@ package dev.kara.uuidbridge.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import dev.kara.uuidbridge.UuidBridge;
+import dev.kara.uuidbridge.migration.BackupManifest;
+import dev.kara.uuidbridge.migration.MigrationLock;
 import dev.kara.uuidbridge.migration.MigrationDirection;
 import dev.kara.uuidbridge.migration.MigrationPlan;
 import dev.kara.uuidbridge.migration.MigrationService;
+import dev.kara.uuidbridge.migration.PendingMigration;
 import dev.kara.uuidbridge.migration.ScanResult;
 import dev.kara.uuidbridge.migration.io.UuidBridgePaths;
 import net.minecraft.commands.CommandSourceStack;
@@ -45,6 +48,12 @@ public final class UuidBridgeCommands {
                             StringArgumentType.getString(context, "options"))))))
             .then(literal("status")
                 .executes(context -> status(context.getSource())))
+            .then(literal("rollback")
+                .then(argument("planId", StringArgumentType.word())
+                    .then(argument("options", StringArgumentType.greedyString())
+                        .executes(context -> rollback(context.getSource(),
+                            StringArgumentType.getString(context, "planId"),
+                            StringArgumentType.getString(context, "options"))))))
             .then(literal("cancel")
                 .then(argument("planId", StringArgumentType.word())
                     .executes(context -> cancel(context.getSource(),
@@ -111,7 +120,7 @@ public final class UuidBridgeCommands {
                 fail(source, "Refusing to apply without --confirm.");
                 return 0;
             }
-            SERVICE.markPending(paths(source), planId);
+            SERVICE.markPendingApply(paths(source), planId, source.getTextName());
             send(source, "UUIDBridge plan marked pending: " + planId);
             send(source, "Restart the server to apply it before the world is used.");
             return 1;
@@ -124,12 +133,44 @@ public final class UuidBridgeCommands {
     private static int status(CommandSourceStack source) {
         try {
             UuidBridgePaths paths = paths(source);
-            Optional<String> pending = SERVICE.pendingPlan(paths);
+            Optional<PendingMigration> pending = SERVICE.pendingMigration(paths);
             Optional<Path> latestReport = SERVICE.latestReport(paths);
-            send(source, "UUIDBridge pending plan: " + pending.orElse("none"));
+            Optional<MigrationLock> lock = SERVICE.lock(paths);
+            send(source, "UUIDBridge pending: " + pending
+                .map(value -> value.action().name().toLowerCase(java.util.Locale.ROOT) + " " + value.planId())
+                .orElse("none"));
             send(source, "UUIDBridge latest report: " + latestReport.map(Path::toString).orElse("none"));
-            send(source, "UUIDBridge migration lock: " + (SERVICE.hasLock(paths) ? "present" : "none"));
+            send(source, "UUIDBridge migration lock: " + lock
+                .map(value -> value.action().name().toLowerCase(java.util.Locale.ROOT) + " " + value.planId())
+                .orElse("none"));
+            Optional<String> planForManifest = pending.map(PendingMigration::planId)
+                .or(() -> latestReport.flatMap(path -> reportPlanId(path.getFileName().toString())));
+            if (planForManifest.isPresent()) {
+                Optional<BackupManifest> manifest = SERVICE.backupManifest(paths, planForManifest.get());
+                send(source, "UUIDBridge backup manifest: " + manifest
+                    .map(value -> value.complete() ? "complete" : "incomplete")
+                    .orElse("none"));
+            } else {
+                send(source, "UUIDBridge backup manifest: none");
+            }
             return pending.isPresent() || latestReport.isPresent() ? 1 : 0;
+        } catch (Exception exception) {
+            fail(source, exception);
+            return 0;
+        }
+    }
+
+    private static int rollback(CommandSourceStack source, String planId, String rawOptions) {
+        try {
+            CommandOptions options = CommandOptions.parse(rawOptions);
+            if (!options.confirm()) {
+                fail(source, "Refusing to rollback without --confirm.");
+                return 0;
+            }
+            SERVICE.markPendingRollback(paths(source), planId, source.getTextName());
+            send(source, "UUIDBridge rollback marked pending: " + planId);
+            send(source, "Restart the server to restore files from the backup manifest.");
+            return 1;
         } catch (Exception exception) {
             fail(source, exception);
             return 0;
@@ -161,5 +202,16 @@ public final class UuidBridgeCommands {
 
     private static void fail(CommandSourceStack source, String message) {
         source.sendFailure(Component.literal("UUIDBridge: " + message));
+    }
+
+    private static Optional<String> reportPlanId(String fileName) {
+        if (!fileName.endsWith(".json")) {
+            return Optional.empty();
+        }
+        String stem = fileName.substring(0, fileName.length() - ".json".length());
+        if (stem.endsWith("-rollback")) {
+            return Optional.of(stem.substring(0, stem.length() - "-rollback".length()));
+        }
+        return Optional.of(stem);
     }
 }

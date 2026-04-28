@@ -6,7 +6,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.io.Reader;
-import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,9 +37,7 @@ public final class JsonCodecs {
 
     public static void write(Path path, Object value) throws IOException {
         Files.createDirectories(path.getParent());
-        try (Writer writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
-            GSON.toJson(value, writer);
-            writer.write(System.lineSeparator());
-        }
+        String json = GSON.toJson(value) + System.lineSeparator();
+        SafeFileWriter.writeAtomic(path, json.getBytes(StandardCharsets.UTF_8));
     }
 }

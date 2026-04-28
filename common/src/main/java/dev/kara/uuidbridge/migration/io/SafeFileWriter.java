@@ -21,6 +21,17 @@ public final class SafeFileWriter {
         }
     }
 
+    public static void copyAtomic(Path source, Path target) throws IOException {
+        Files.createDirectories(target.getParent());
+        Path temp = target.resolveSibling(target.getFileName() + ".tmp-" + UUID.randomUUID());
+        Files.copy(source, temp, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING);
+        try {
+            Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException atomicFailure) {
+            Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
     public static void moveAtomic(Path source, Path target) throws IOException {
         Files.createDirectories(target.getParent());
         try {
