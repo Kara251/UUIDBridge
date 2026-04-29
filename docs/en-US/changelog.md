@@ -14,3 +14,5 @@
   and move the changelog under `docs/`.
 - Remove the unused `IdentityReference` placeholder type.
 - Remove public `binary` entries from `targets.json` support.
+- Remove Mojang network lookup; offline-to-online migration now requires an
+  explicit mapping file.

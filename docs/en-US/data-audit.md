@@ -33,8 +33,8 @@ be reported but not rewritten by default.
 - Scoreboard entries keyed by player name are not rewritten. That is correct for
   UUID mode migration, but a future username migration tool would need separate
   rules.
-- Generic binary replacement is dangerous outside explicit targets. It should
-  stay opt-in and should not be used as a broad scanner.
+- Generic binary replacement is kept only as an internal fallback for known
+  adapters. Public `binary` targets are not accepted.
 - Region handling still reads a whole `.mca` file before writing changed chunks.
   The next performance step is a true sector-level region writer.
 
@@ -52,10 +52,9 @@ be reported but not rewritten by default.
 
 ## Features To Keep Small Or Remove
 
-- Network Mojang lookup is not essential for safe migration. Mapping files are
-  safer and reproducible; network lookup should remain disabled by default and
-  may be removed from alpha builds.
-- Public `binary` targets are too risky for alpha and should stay unavailable
-  until real fixtures prove they are needed.
+- Mojang network lookup has been removed. Offline-to-online migrations require
+  an explicit mapping file so the result is deterministic and auditable.
+- Public `binary` targets are too risky for alpha and remain unavailable until
+  real fixtures prove they are needed.
 - Any type or option not connected to a real migration path should be deleted
   instead of kept as a placeholder.

@@ -27,7 +27,7 @@ class NbtIdentityRewriterTest {
     void rewritesSemanticNbtIdentityShapes() throws Exception {
         FileChangeResult result = NbtIdentityRewriter.rewrite(vanillaIdentityFixture(ONLINE), List.of(MAPPING));
 
-        assertEquals(6, result.replacements());
+        assertEquals(10, result.replacements());
 
         UuidMapping reverse = new UuidMapping(
             "Alice",
@@ -36,7 +36,7 @@ class NbtIdentityRewriterTest {
             MigrationDirection.OFFLINE_TO_ONLINE,
             MappingSource.MAPPING_FILE
         );
-        assertEquals(6, NbtIdentityRewriter.rewrite(result.content(), List.of(reverse)).replacements());
+        assertEquals(10, NbtIdentityRewriter.rewrite(result.content(), List.of(reverse)).replacements());
     }
 
     private static byte[] vanillaIdentityFixture(UUID uuid) throws Exception {
@@ -51,6 +51,10 @@ class NbtIdentityRewriterTest {
             writeLong(output, "UUIDLeast", uuid.getLeastSignificantBits());
             writeStringList(output, "Players", List.of(uuid.toString()));
             writeGossips(output, uuid);
+            writeSkullOwner(output, uuid);
+            writeBrainAngryAt(output, uuid);
+            writeLeash(output, uuid);
+            writeLongArray(output, "Thrower", uuid);
             output.writeByte(0);
         }
         return bytes.toByteArray();
@@ -90,6 +94,21 @@ class NbtIdentityRewriterTest {
         }
     }
 
+    private static void writeLongArray(DataOutputStream output, String name, UUID uuid) throws Exception {
+        output.writeByte(12);
+        output.writeUTF(name);
+        output.writeInt(2);
+        output.writeLong(uuid.getMostSignificantBits());
+        output.writeLong(uuid.getLeastSignificantBits());
+    }
+
+    private static void writeCompound(DataOutputStream output, String name, CompoundWriter writer) throws Exception {
+        output.writeByte(10);
+        output.writeUTF(name);
+        writer.write(output);
+        output.writeByte(0);
+    }
+
     private static void writeGossips(DataOutputStream output, UUID uuid) throws Exception {
         output.writeByte(9);
         output.writeUTF("Gossips");
@@ -97,5 +116,24 @@ class NbtIdentityRewriterTest {
         output.writeInt(1);
         writeString(output, "Target", uuid.toString());
         output.writeByte(0);
+    }
+
+    private static void writeSkullOwner(DataOutputStream output, UUID uuid) throws Exception {
+        writeCompound(output, "SkullOwner", skullOwner -> writeIntArray(skullOwner, "Id",
+            UuidBinaryCodec.asIntArray(uuid)));
+    }
+
+    private static void writeBrainAngryAt(DataOutputStream output, UUID uuid) throws Exception {
+        writeCompound(output, "Brain", brain -> writeCompound(brain, "memories",
+            memories -> writeCompound(memories, "minecraft:angry_at",
+                angryAt -> writeString(angryAt, "value", uuid.toString()))));
+    }
+
+    private static void writeLeash(DataOutputStream output, UUID uuid) throws Exception {
+        writeCompound(output, "Leash", leash -> writeString(leash, "UUID", uuid.toString()));
+    }
+
+    private interface CompoundWriter {
+        void write(DataOutputStream output) throws Exception;
     }
 }

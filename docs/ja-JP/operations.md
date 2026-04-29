@@ -10,7 +10,7 @@ UUIDBridge は、コンソール、ファイルマネージャー、再起動ボ
 3. offline-mode から online-mode へ戻す場合は、マッピングファイルをサーバー
    ルートに置きます。
 4. `uuidbridge scan <online-to-offline|offline-to-online>` を実行します。
-5. `uuidbridge plan <direction> [--mapping <file>] [--allow-network]` を実行します。
+5. `uuidbridge plan <direction> [--mapping <file>]` を実行します。
 6. `uuidbridge apply <planId> --confirm` を実行します。
 7. サーバーを再起動します。UUIDBridge は通常のワールド使用前に pending plan
    を適用します。
@@ -53,8 +53,8 @@ JSON：
 ```
 
 online-mode から offline-mode へ移行する場合、`offlineUuid` は省略できます。
-offline-mode から online-mode へ戻す場合は、ネットワーク照会ではなく
-マッピングファイルを使うことを推奨します。
+offline-mode から online-mode へ戻す場合は、マッピングファイルが必須です。
+UUIDBridge は移行中に Mojang へ問い合わせません。
 
 ## 対象データ
 

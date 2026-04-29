@@ -9,7 +9,7 @@ UUIDBridge 面向面板服环境设计。管理员通常只有控制台、文件
 2. 启动一次服务器，在面板控制台运行 `uuidbridge status`。
 3. 如果是从离线模式迁回正版验证模式，把映射文件上传到服务器根目录。
 4. 运行 `uuidbridge scan <online-to-offline|offline-to-online>`。
-5. 运行 `uuidbridge plan <direction> [--mapping <file>] [--allow-network]`。
+5. 运行 `uuidbridge plan <direction> [--mapping <file>]`。
 6. 运行 `uuidbridge apply <planId> --confirm`。
 7. 重启服务器。UUIDBridge 会在正常进入世界前执行 pending 计划。
 
@@ -50,8 +50,8 @@ JSON：
 ```
 
 从正版验证模式迁到离线模式时，`offlineUuid` 可以省略，因为 UUIDBridge 能根据
-玩家名计算离线 UUID。从离线模式迁回正版验证模式时，建议提供映射文件；不要
-依赖联网查询。
+玩家名计算离线 UUID。从离线模式迁回正版验证模式时必须提供映射文件；UUIDBridge
+迁移过程中不会查询 Mojang。
 
 ## 已覆盖数据
 

@@ -27,7 +27,7 @@ UUIDBridge 应迁移的是身份引用，不是玩家名。online-mode 和 offli
   专用 adapter 和夹具。
 - scoreboard 里以玩家名为 key 的分数和队伍成员默认不改。这对 UUID 模式迁移是
   正确的；如果以后做改名迁移，那是另一套规则。
-- 通用 binary 替换不能宽泛扫描，只能显式 opt-in。
+- 通用 binary 替换只保留为已知 adapter 的内部 fallback；公开 `binary` 目标不接受。
 - region 现在仍会读入整个 `.mca` 文件后重写变化 chunk。下一步性能优化应做
   sector-level writer。
 
@@ -43,8 +43,8 @@ UUIDBridge 应迁移的是身份引用，不是玩家名。online-mode 和 offli
 
 ## 应该收敛或删除的功能
 
-- Mojang 联网查询不是安全迁移的必要功能。映射文件更可复现；联网查询应继续默认
-  关闭，alpha 甚至可以移除。
-- 公开 `binary` 目标风险偏高，alpha 不应该开放。除非有真实样本证明需要，
-  否则继续不可用。
+- Mojang 联网查询已移除。offline-to-online 必须提供显式映射文件，保证结果可复现、
+  可审计。
+- 公开 `binary` 目标风险偏高，alpha 不开放。除非有真实样本证明需要，否则继续
+  不可用。
 - 没接入真实迁移路径的占位类型和选项应删除，不该留在主线里装样子。

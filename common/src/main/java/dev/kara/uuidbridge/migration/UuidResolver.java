@@ -1,7 +1,6 @@
 package dev.kara.uuidbridge.migration;
 
 import dev.kara.uuidbridge.migration.io.MappingFileParser;
-import dev.kara.uuidbridge.migration.io.MojangProfileClient;
 import dev.kara.uuidbridge.migration.rewrite.OfflineUuid;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -13,21 +12,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 public final class UuidResolver {
-    private final MojangProfileClient mojangProfileClient;
-
-    public UuidResolver() {
-        this(new MojangProfileClient());
-    }
-
-    UuidResolver(MojangProfileClient mojangProfileClient) {
-        this.mojangProfileClient = mojangProfileClient;
-    }
-
     public ResolvedMappings resolve(
         MigrationDirection direction,
         List<KnownPlayer> knownPlayers,
-        Optional<Path> mappingFile,
-        boolean allowNetwork
+        Optional<Path> mappingFile
     ) throws IOException {
         Map<String, UuidMapping> mappings = new LinkedHashMap<>();
         List<MissingMapping> missing = new ArrayList<>();
@@ -52,19 +40,10 @@ public final class UuidResolver {
             UUID offline = player.offlineUuid().orElseGet(() -> OfflineUuid.forName(name));
             Optional<UUID> online = player.onlineUuid()
                 .filter(candidate -> !candidate.equals(offline));
-            if (online.isEmpty() && allowNetwork) {
-                try {
-                    online = mojangProfileClient.lookupOnlineUuid(name);
-                    Thread.sleep(250L);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    throw new IOException("Interrupted while resolving Mojang profile", interrupted);
-                }
-            }
             if (online.isPresent()) {
                 mappings.put(key, new UuidMapping(name, online.get(), offline, direction, MappingSource.USERCACHE));
             } else {
-                missing.add(new MissingMapping(name, offline, "Missing online UUID; provide a mapping file or allow network lookup."));
+                missing.add(new MissingMapping(name, offline, "Missing online UUID; provide a mapping file."));
             }
         }
 

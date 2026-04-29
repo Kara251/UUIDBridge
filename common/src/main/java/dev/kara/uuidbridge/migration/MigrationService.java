@@ -17,46 +17,41 @@ public final class MigrationService {
     public ScanResult scan(
         UuidBridgePaths paths,
         MigrationDirection direction,
-        Optional<String> mapping,
-        boolean allowNetwork
+        Optional<String> mapping
     ) throws IOException {
-        return scan(paths, direction, mapping, allowNetwork, Optional.empty(), Optional.empty());
+        return scan(paths, direction, mapping, Optional.empty(), Optional.empty());
     }
 
     public ScanResult scan(
         UuidBridgePaths paths,
         MigrationDirection direction,
         Optional<String> mapping,
-        boolean allowNetwork,
         Optional<String> targets,
         Optional<String> singleplayerName
     ) throws IOException {
         Optional<Path> mappingFile = resolveMapping(paths, mapping);
         Optional<Path> targetsFile = resolveControlFile(paths, targets);
-        return planner.scan(paths, direction, mappingFile, allowNetwork, targetsFile, singleplayerName);
+        return planner.scan(paths, direction, mappingFile, targetsFile, singleplayerName);
+    }
+
+    public MigrationPlan createPlan(
+        UuidBridgePaths paths,
+        MigrationDirection direction,
+        Optional<String> mapping
+    ) throws IOException {
+        return createPlan(paths, direction, mapping, Optional.empty(), Optional.empty());
     }
 
     public MigrationPlan createPlan(
         UuidBridgePaths paths,
         MigrationDirection direction,
         Optional<String> mapping,
-        boolean allowNetwork
-    ) throws IOException {
-        return createPlan(paths, direction, mapping, allowNetwork, Optional.empty(), Optional.empty());
-    }
-
-    public MigrationPlan createPlan(
-        UuidBridgePaths paths,
-        MigrationDirection direction,
-        Optional<String> mapping,
-        boolean allowNetwork,
         Optional<String> targets,
         Optional<String> singleplayerName
     ) throws IOException {
         Optional<Path> mappingFile = resolveMapping(paths, mapping);
         Optional<Path> targetsFile = resolveControlFile(paths, targets);
-        MigrationPlan plan = planner.createPlan(paths, direction, mappingFile, allowNetwork,
-            targetsFile, singleplayerName);
+        MigrationPlan plan = planner.createPlan(paths, direction, mappingFile, targetsFile, singleplayerName);
         JsonCodecs.write(paths.planPath(plan.id()), plan);
         return plan;
     }

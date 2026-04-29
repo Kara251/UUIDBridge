@@ -67,9 +67,12 @@ public final class UuidBridgeCommands {
     private static int scan(CommandSourceStack source, String directionValue, String rawOptions) {
         try {
             CommandOptions options = CommandOptions.parse(rawOptions);
+            if (rejectUnknownOptions(source, options)) {
+                return 0;
+            }
             MigrationDirection direction = MigrationDirection.parse(directionValue);
-            ScanResult result = SERVICE.scan(paths(source), direction, options.mapping(), options.allowNetwork(),
-                options.targets(), options.singleplayerName());
+            ScanResult result = SERVICE.scan(paths(source), direction, options.mapping(), options.targets(),
+                options.singleplayerName());
             long replacements = result.estimatedChanges().stream()
                 .mapToLong(change -> change.replacements())
                 .sum();
@@ -86,7 +89,7 @@ public final class UuidBridgeCommands {
             }
             if (!result.missingMappings().isEmpty()) {
                 send(source, "Missing mappings: " + result.missingMappings().size()
-                    + "; provide --mapping <file> or use --allow-network when appropriate.");
+                    + "; provide --mapping <file>.");
             }
             return result.conflicts().isEmpty() && result.missingMappings().isEmpty() ? 1 : 0;
         } catch (Exception exception) {
@@ -98,9 +101,12 @@ public final class UuidBridgeCommands {
     private static int plan(CommandSourceStack source, String directionValue, String rawOptions) {
         try {
             CommandOptions options = CommandOptions.parse(rawOptions);
+            if (rejectUnknownOptions(source, options)) {
+                return 0;
+            }
             MigrationDirection direction = MigrationDirection.parse(directionValue);
-            MigrationPlan plan = SERVICE.createPlan(paths(source), direction, options.mapping(), options.allowNetwork(),
-                options.targets(), options.singleplayerName());
+            MigrationPlan plan = SERVICE.createPlan(paths(source), direction, options.mapping(), options.targets(),
+                options.singleplayerName());
             send(source, "UUIDBridge plan created: " + plan.id());
             long replacements = plan.estimatedChanges().stream()
                 .mapToLong(change -> change.replacements())
@@ -131,6 +137,9 @@ public final class UuidBridgeCommands {
     private static int apply(CommandSourceStack source, String planId, String rawOptions) {
         try {
             CommandOptions options = CommandOptions.parse(rawOptions);
+            if (rejectUnknownOptions(source, options)) {
+                return 0;
+            }
             if (!options.confirm()) {
                 fail(source, "Refusing to apply without --confirm.");
                 return 0;
@@ -187,6 +196,9 @@ public final class UuidBridgeCommands {
     private static int rollback(CommandSourceStack source, String planId, String rawOptions) {
         try {
             CommandOptions options = CommandOptions.parse(rawOptions);
+            if (rejectUnknownOptions(source, options)) {
+                return 0;
+            }
             if (!options.confirm()) {
                 fail(source, "Refusing to rollback without --confirm.");
                 return 0;
@@ -226,6 +238,14 @@ public final class UuidBridgeCommands {
 
     private static void fail(CommandSourceStack source, String message) {
         source.sendFailure(Component.literal("UUIDBridge: " + message));
+    }
+
+    private static boolean rejectUnknownOptions(CommandSourceStack source, CommandOptions options) {
+        if (options.unknownOptions().isEmpty()) {
+            return false;
+        }
+        fail(source, "Unknown option(s): " + String.join(", ", options.unknownOptions()));
+        return true;
     }
 
     private static Optional<String> reportPlanId(String fileName) {

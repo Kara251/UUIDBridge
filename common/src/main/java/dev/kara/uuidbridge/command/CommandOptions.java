@@ -8,16 +8,16 @@ record CommandOptions(
     Optional<String> mapping,
     Optional<String> targets,
     Optional<String> singleplayerName,
-    boolean allowNetwork,
-    boolean confirm
+    boolean confirm,
+    List<String> unknownOptions
 ) {
     static CommandOptions parse(String raw) {
         List<String> tokens = split(raw);
         Optional<String> mapping = Optional.empty();
         Optional<String> targets = Optional.empty();
         Optional<String> singleplayerName = Optional.empty();
-        boolean allowNetwork = false;
         boolean confirm = false;
+        List<String> unknownOptions = new ArrayList<>();
 
         for (int i = 0; i < tokens.size(); i++) {
             String token = tokens.get(i);
@@ -27,13 +27,13 @@ record CommandOptions(
                 targets = Optional.of(tokens.get(++i));
             } else if ("--singleplayer-name".equals(token) && i + 1 < tokens.size()) {
                 singleplayerName = Optional.of(tokens.get(++i));
-            } else if ("--allow-network".equals(token)) {
-                allowNetwork = true;
             } else if ("--confirm".equals(token)) {
                 confirm = true;
+            } else if (token.startsWith("--")) {
+                unknownOptions.add(token);
             }
         }
-        return new CommandOptions(mapping, targets, singleplayerName, allowNetwork, confirm);
+        return new CommandOptions(mapping, targets, singleplayerName, confirm, List.copyOf(unknownOptions));
     }
 
     private static List<String> split(String raw) {

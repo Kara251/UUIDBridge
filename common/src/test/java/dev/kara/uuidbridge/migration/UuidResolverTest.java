@@ -15,8 +15,7 @@ class UuidResolverTest {
         var resolved = resolver.resolve(
             MigrationDirection.OFFLINE_TO_ONLINE,
             List.of(new KnownPlayer("Alice", Optional.of(offline), Optional.of(offline))),
-            Optional.empty(),
-            false
+            Optional.empty()
         );
 
         assertEquals(0, resolved.mappings().size());

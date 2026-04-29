@@ -11,7 +11,6 @@ public record MigrationPlan(
     List<PlanConflict> conflicts,
     List<MissingMapping> missingMappings,
     String createdAt,
-    boolean allowNetwork,
     CoverageReport coverage,
     SingleplayerPlayerCopy singleplayerPlayerCopy,
     String targetsFile
@@ -24,11 +23,10 @@ public record MigrationPlan(
         List<PlannedChange> estimatedChanges,
         List<PlanConflict> conflicts,
         List<MissingMapping> missingMappings,
-        String createdAt,
-        boolean allowNetwork
+        String createdAt
     ) {
         this(id, direction, mappings, targetPaths, estimatedChanges, conflicts, missingMappings,
-            createdAt, allowNetwork, CoverageReport.empty(), null, "");
+            createdAt, CoverageReport.empty(), null, "");
     }
 
     public MigrationPlan {

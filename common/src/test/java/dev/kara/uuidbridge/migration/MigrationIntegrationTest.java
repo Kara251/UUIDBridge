@@ -38,7 +38,7 @@ class MigrationIntegrationTest {
         UuidBridgePaths paths = fixture(ONLINE_UUID, ONLINE_UUID, Optional.empty());
         MigrationService service = new MigrationService();
 
-        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty(), false);
+        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty());
         assertTrue(plan.canApply());
         service.markPending(paths, plan.id());
         MigrationReport report = service.executePending(paths);
@@ -76,7 +76,7 @@ class MigrationIntegrationTest {
         MigrationService service = new MigrationService();
 
         MigrationPlan plan = service.createPlan(paths, MigrationDirection.OFFLINE_TO_ONLINE,
-            Optional.of("mapping.csv"), false);
+            Optional.of("mapping.csv"));
         assertTrue(plan.canApply());
         service.markPending(paths, plan.id());
         MigrationReport report = service.executePending(paths);
@@ -92,7 +92,7 @@ class MigrationIntegrationTest {
     void manuallyRollsBackSuccessfulMigrationAndProtectsCurrentFiles() throws Exception {
         UuidBridgePaths paths = fixture(ONLINE_UUID, ONLINE_UUID, Optional.empty());
         MigrationService service = new MigrationService();
-        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty(), false);
+        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty());
 
         service.markPending(paths, plan.id());
         assertTrue(service.executePending(paths).successful());
@@ -115,7 +115,7 @@ class MigrationIntegrationTest {
     void failedApplyAutomaticallyRollsBackAndKeepsPendingReport() throws Exception {
         UuidBridgePaths paths = fixture(ONLINE_UUID, ONLINE_UUID, Optional.empty());
         MigrationService service = new MigrationService();
-        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty(), false);
+        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty());
 
         service.markPending(paths, plan.id());
         Files.writeString(paths.worldDir().resolve("playerdata").resolve(OFFLINE_UUID + ".dat"), "existing");
@@ -139,7 +139,7 @@ class MigrationIntegrationTest {
     void damagedRegionIsReportedWithoutStoppingOtherFiles() throws Exception {
         UuidBridgePaths paths = fixture(ONLINE_UUID, ONLINE_UUID, Optional.empty());
         MigrationService service = new MigrationService();
-        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty(), false);
+        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty());
         Files.write(paths.worldDir().resolve("entities").resolve("r.1.0.mca"), damagedRegionWithTargetUuid());
 
         service.markPending(paths, plan.id());
@@ -160,7 +160,7 @@ class MigrationIntegrationTest {
     void corruptedBackupMakesManualRollbackKeepPendingLockAndReport() throws Exception {
         UuidBridgePaths paths = fixture(ONLINE_UUID, ONLINE_UUID, Optional.empty());
         MigrationService service = new MigrationService();
-        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty(), false);
+        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty());
         service.markPending(paths, plan.id());
         assertTrue(service.executePending(paths).successful());
 
@@ -184,7 +184,7 @@ class MigrationIntegrationTest {
     void cancelIsRejectedWhenLockExists() throws Exception {
         UuidBridgePaths paths = fixture(ONLINE_UUID, ONLINE_UUID, Optional.empty());
         MigrationService service = new MigrationService();
-        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty(), false);
+        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty());
         service.markPending(paths, plan.id());
         JsonCodecs.write(paths.controlDir().resolve("migration.lock"),
             new MigrationLock(PendingAction.APPLY, plan.id(), "now"));
@@ -221,7 +221,7 @@ class MigrationIntegrationTest {
         MigrationService service = new MigrationService();
 
         MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE,
-            Optional.empty(), false, Optional.empty(), Optional.of(NAME));
+            Optional.empty(), Optional.empty(), Optional.of(NAME));
 
         assertTrue(plan.canApply());
         assertTrue(plan.singleplayerPlayerCopy() != null);

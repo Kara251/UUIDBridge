@@ -10,7 +10,7 @@ usually have a console, file manager, and restart button, but not a full shell.
 3. Upload a mapping file to the server root when migrating from offline-mode
    back to online-mode.
 4. Run `uuidbridge scan <online-to-offline|offline-to-online>`.
-5. Run `uuidbridge plan <direction> [--mapping <file>] [--allow-network]`.
+5. Run `uuidbridge plan <direction> [--mapping <file>]`.
 6. Run `uuidbridge apply <planId> --confirm`.
 7. Restart the server. UUIDBridge applies the pending plan before normal play.
 
@@ -53,7 +53,7 @@ JSON:
 
 `offlineUuid` may be omitted when migrating online-mode to offline-mode because
 UUIDBridge can derive it from the player name. For offline-mode to online-mode,
-provide a mapping file unless `--allow-network` is intentionally enabled.
+provide a mapping file. UUIDBridge does not query Mojang during migration.
 
 ## Data Covered
 
@@ -65,7 +65,7 @@ provide a mapping file unless `--allow-network` is intentionally enabled.
 - Vanilla identity references in NBT and JSON forms, including entity owners,
   villager gossip targets, custom boss event players, raid saved data, and UUID
   values in scoreboard data
-- Optional extra JSON/NBT/binary targets declared in `uuidbridge/targets.json`
+- Optional extra JSON/NBT/region targets declared in `uuidbridge/targets.json`
 
 Scoreboard player names are not rewritten by default. UUIDBridge migrates UUID
 identity references; online/offline UUID migrations do not change player names.

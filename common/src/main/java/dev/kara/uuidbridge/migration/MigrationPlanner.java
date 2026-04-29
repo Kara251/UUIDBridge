@@ -28,22 +28,20 @@ public final class MigrationPlanner {
     public ScanResult scan(
         UuidBridgePaths paths,
         MigrationDirection direction,
-        Optional<Path> mappingFile,
-        boolean allowNetwork
+        Optional<Path> mappingFile
     ) throws IOException {
-        return scan(paths, direction, mappingFile, allowNetwork, Optional.empty(), Optional.empty());
+        return scan(paths, direction, mappingFile, Optional.empty(), Optional.empty());
     }
 
     public ScanResult scan(
         UuidBridgePaths paths,
         MigrationDirection direction,
         Optional<Path> mappingFile,
-        boolean allowNetwork,
         Optional<Path> targetsFile,
         Optional<String> singleplayerName
     ) throws IOException {
         List<KnownPlayer> players = KnownPlayerScanner.scan(paths.gameDir(), paths.worldDir());
-        UuidResolver.ResolvedMappings resolved = resolver.resolve(direction, players, mappingFile, allowNetwork);
+        UuidResolver.ResolvedMappings resolved = resolver.resolve(direction, players, mappingFile);
         List<PlanConflict> conflicts = new ArrayList<>(conflicts(resolved.mappings()));
         List<MissingMapping> missing = new ArrayList<>(resolved.missingMappings());
         SingleplayerPlayerCopy singleplayerCopy = singleplayerCopy(paths, resolved.mappings(), singleplayerName,
@@ -56,22 +54,20 @@ public final class MigrationPlanner {
     public MigrationPlan createPlan(
         UuidBridgePaths paths,
         MigrationDirection direction,
-        Optional<Path> mappingFile,
-        boolean allowNetwork
+        Optional<Path> mappingFile
     ) throws IOException {
-        return createPlan(paths, direction, mappingFile, allowNetwork, Optional.empty(), Optional.empty());
+        return createPlan(paths, direction, mappingFile, Optional.empty(), Optional.empty());
     }
 
     public MigrationPlan createPlan(
         UuidBridgePaths paths,
         MigrationDirection direction,
         Optional<Path> mappingFile,
-        boolean allowNetwork,
         Optional<Path> targetsFile,
         Optional<String> singleplayerName
     ) throws IOException {
         List<KnownPlayer> players = KnownPlayerScanner.scan(paths.gameDir(), paths.worldDir());
-        UuidResolver.ResolvedMappings resolved = resolver.resolve(direction, players, mappingFile, allowNetwork);
+        UuidResolver.ResolvedMappings resolved = resolver.resolve(direction, players, mappingFile);
         List<PlanConflict> conflicts = new ArrayList<>(conflicts(resolved.mappings()));
         List<MissingMapping> missing = new ArrayList<>(resolved.missingMappings());
         SingleplayerPlayerCopy singleplayerCopy = singleplayerCopy(paths, resolved.mappings(), singleplayerName,
@@ -89,7 +85,6 @@ public final class MigrationPlanner {
             List.copyOf(conflicts),
             List.copyOf(missing),
             Instant.now().toString(),
-            allowNetwork,
             estimate.coverage(),
             singleplayerCopy,
             targetsFile.map(Path::toString).orElse("")
