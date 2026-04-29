@@ -74,7 +74,7 @@ identity references; online/offline UUID migrations do not change player names.
 
 Create `uuidbridge/targets.json` when a mod stores claims, teams, permissions,
 or backpack ownership outside the standard world files. See
-`docs/compat/targets.md` for the schema and examples.
+`docs/en-US/compat/targets.md` for the schema and examples.
 
 Use `--targets <file>` to test a different targets file:
 

@@ -9,3 +9,7 @@
   automatic rollback on failed apply, and manual rollback reports.
 - Add identity coverage reporting, semantic JSON/NBT adapters, optional mod
   target files, and singleplayer `Data.Player` extraction.
+- Remove agent-only instructions from the public repository.
+- Move documentation into Chinese, English, and Japanese language directories
+  and move the changelog under `docs/`.
+- Remove the unused `IdentityReference` placeholder type.
