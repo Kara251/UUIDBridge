@@ -15,5 +15,6 @@ crash-reports/
 *.iml
 .vscode/
 .DS_Store
+AGENTS.md
 
 /uuidbridge/
