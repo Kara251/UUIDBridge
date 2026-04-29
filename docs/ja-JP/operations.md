@@ -65,7 +65,7 @@ offline-mode から online-mode へ戻す場合は、ネットワーク照会で
 - ワールドの `region`、`entities`、`data`、`level.dat` NBT ファイル
 - entity owner、村人 gossip、BossBar player list、raid saved data、scoreboard
   内の UUID 値
-- `uuidbridge/targets.json` で指定した追加 JSON、NBT、region、明示的 binary target
+- `uuidbridge/targets.json` で指定した追加 JSON、NBT、region target
 
 scoreboard のプレイヤー名は既定では書き換えません。online/offline UUID 移行で
 変わるのは UUID であり、プレイヤー名ではありません。
@@ -81,8 +81,8 @@ uuidbridge scan online-to-offline --targets uuidbridge/targets.json
 uuidbridge plan online-to-offline --targets uuidbridge/targets.json
 ```
 
-SQLite、LevelDB、その他のトランザクション型データベースは、この段階では直接
-書き換えません。専用 adapter ができるまで対象に含めないでください。
+binary、SQLite、LevelDB、その他のトランザクション型データベースは、この段階
+では直接書き換えません。専用 adapter ができるまで対象に含めないでください。
 
 ## シングルプレイヤーの Player タグ
 

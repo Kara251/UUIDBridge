@@ -29,10 +29,9 @@
 - `nbt-gzip`：迁移压缩 NBT。
 - `nbt-plain`：迁移未压缩 NBT。
 - `region`：迁移 `.mca` chunk。
-- `binary`：只对显式包含文件做精确 UUID 字节或字符串替换。
 
 路径不能逃出服务器目录或世界目录。宽泛扫描默认排除 `uuidbridge/backups`、
 日志、崩溃报告、`.git`、构建输出和 `mods` 目录。
 
-SQLite、LevelDB 等数据库文件本阶段不写入。必须等真实样本和专用 adapter
+binary、SQLite、LevelDB 等文件本阶段不写入。必须等真实样本和专用 adapter
 准备好后再做。

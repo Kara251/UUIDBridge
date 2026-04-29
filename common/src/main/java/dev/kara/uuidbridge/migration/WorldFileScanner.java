@@ -255,16 +255,28 @@ public final class WorldFileScanner {
                     .filter(path -> !isDefaultExcluded(paths.gameDir(), path))
                     .filter(path -> !isExcludedByTargets(paths, path, excludes))
                     .filter(path -> matcher.matches(root.relativize(path.toAbsolutePath().normalize())))
-                    .forEach(path -> add(result, displayPath(targetRoot.root(), root, path),
-                        adapterFor(format, path), "targets.json", true));
+                    .forEach(path -> addExtraFile(result, targetRoot.root(), root, path, format));
             }
             return;
         }
         Path resolved = PathSecurity.resolveInside(targetRoot.root(), pattern);
         if (Files.isRegularFile(resolved) && !isExcludedByTargets(paths, resolved, excludes)) {
-            add(result, displayPath(targetRoot.root(), root, resolved), adapterFor(format, resolved),
-                "targets.json", true);
+            addExtraFile(result, targetRoot.root(), root, resolved, format);
         }
+    }
+
+    private static void addExtraFile(
+        Map<Path, DiscoveredFile> result,
+        Path displayRoot,
+        Path canonicalRoot,
+        Path file,
+        String format
+    ) {
+        String adapter = adapterFor(format, file);
+        if (DataAdapters.BINARY.equals(adapter)) {
+            return;
+        }
+        add(result, displayPath(displayRoot, canonicalRoot, file), adapter, "targets.json", true);
     }
 
     private static Path displayPath(Path displayRoot, Path canonicalRoot, Path file) {

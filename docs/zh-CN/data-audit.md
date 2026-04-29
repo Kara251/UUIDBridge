@@ -17,7 +17,7 @@ UUIDBridge 应迁移的是身份引用，不是玩家名。online-mode 和 offli
   UUID 值、Touhou Little Maid 风格 `owner_uuid`。
 - 单人存档转服务器：显式 `--singleplayer-name <name>` 时，可以把 `level.dat`
   的 `Data.Player` 复制到 `playerdata/<targetUuid>.dat`。
-- `uuidbridge/targets.json` 声明的额外 JSON、NBT、region 或显式 binary 文件。
+- `uuidbridge/targets.json` 声明的额外 JSON、NBT 或 region 文件。
 
 ## 重要缺口
 
@@ -45,6 +45,6 @@ UUIDBridge 应迁移的是身份引用，不是玩家名。online-mode 和 offli
 
 - Mojang 联网查询不是安全迁移的必要功能。映射文件更可复现；联网查询应继续默认
   关闭，alpha 甚至可以移除。
-- 公开 `binary` 目标风险偏高。除非有真实样本证明需要，否则应保持显式 opt-in，
-  或从公开文档里移除。
+- 公开 `binary` 目标风险偏高，alpha 不应该开放。除非有真实样本证明需要，
+  否则继续不可用。
 - 没接入真实迁移路径的占位类型和选项应删除，不该留在主线里装样子。

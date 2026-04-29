@@ -20,7 +20,7 @@ be reported but not rewritten by default.
 - Singleplayer transfer: explicit `--singleplayer-name <name>` can copy
   `level.dat` `Data.Player` into `playerdata/<targetUuid>.dat`.
 - Extra mod files declared by `uuidbridge/targets.json` when they are JSON,
-  NBT, region, or explicitly included binary files.
+  NBT, or region files.
 
 ## Important Gaps
 
@@ -55,7 +55,7 @@ be reported but not rewritten by default.
 - Network Mojang lookup is not essential for safe migration. Mapping files are
   safer and reproducible; network lookup should remain disabled by default and
   may be removed from alpha builds.
-- Public `binary` targets are risky. Keep them explicit-only or remove them
+- Public `binary` targets are too risky for alpha and should stay unavailable
   until real fixtures prove they are needed.
 - Any type or option not connected to a real migration path should be deleted
   instead of kept as a placeholder.

@@ -13,3 +13,4 @@
 - ドキュメントを中国語、英語、日本語の言語別ディレクトリへ整理し、変更履歴を
   `docs/` へ移動。
 - 実際の移行経路に接続されていない `IdentityReference` placeholder type を削除。
+- `targets.json` の公開 `binary` entry support を削除。

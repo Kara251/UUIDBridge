@@ -29,11 +29,10 @@
 - `nbt-gzip`：圧縮 NBT を書き換えます。
 - `nbt-plain`：非圧縮 NBT を書き換えます。
 - `region`：`.mca` chunk を書き換えます。
-- `binary`：明示的に指定されたファイルだけで UUID byte/string を正確に置換します。
 
 パスはサーバーまたはワールドディレクトリの外へ出られません。広範囲スキャンでは
 `uuidbridge/backups`、ログ、クラッシュレポート、`.git`、build 出力、`mods`
 ディレクトリを除外します。
 
-SQLite、LevelDB などのデータベースファイルはこの段階では書き換えません。
-実データと専用 adapter が揃ってから扱います。
+binary、SQLite、LevelDB などのファイルはこの段階では書き換えません。実データ
+と専用 adapter が揃ってから扱います。

@@ -13,3 +13,4 @@
 - Move documentation into Chinese, English, and Japanese language directories
   and move the changelog under `docs/`.
 - Remove the unused `IdentityReference` placeholder type.
+- Remove public `binary` entries from `targets.json` support.

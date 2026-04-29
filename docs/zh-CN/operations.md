@@ -62,7 +62,7 @@ JSON：
 - 世界 `region`、`entities`、`data`、`level.dat` NBT 文件
 - 实体 owner、村民 gossip、BossBar 玩家列表、袭击保存数据、scoreboard 中的
   UUID 值等原版身份引用
-- `uuidbridge/targets.json` 声明的额外 JSON、NBT、region 或显式 binary 目标
+- `uuidbridge/targets.json` 声明的额外 JSON、NBT 或 region 目标
 
 scoreboard 中的玩家名默认不改。online/offline UUID 迁移改变的是 UUID 身份，
 不是玩家名。
@@ -77,8 +77,8 @@ uuidbridge scan online-to-offline --targets uuidbridge/targets.json
 uuidbridge plan online-to-offline --targets uuidbridge/targets.json
 ```
 
-SQLite、LevelDB 和其他事务型数据库本阶段不直接写入。没有专用 adapter 前，
-不要把数据库文件加入迁移目标。
+binary、SQLite、LevelDB 和其他事务型数据库本阶段不直接写入。没有专用 adapter
+前，不要把这些文件加入迁移目标。
 
 ## 单人存档 Player 标签
 

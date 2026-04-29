@@ -68,6 +68,9 @@ public final class DataAdapters {
         if (normalized.equals("plain-nbt")) {
             return Optional.of(NBT_PLAIN);
         }
+        if (normalized.equals(BINARY)) {
+            return Optional.empty();
+        }
         if (BY_ID.containsKey(normalized)) {
             return Optional.of(normalized);
         }
