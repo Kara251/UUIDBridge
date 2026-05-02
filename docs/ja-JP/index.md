@@ -9,6 +9,7 @@ UUID を移行するときに、プレイヤーに紐づくデータを失わな
 ## ドキュメント
 
 - [運用ガイド](operations.md)
+- [バニラ対応範囲](vanilla-coverage.md)
 - [追加移行ターゲット](compat/targets.md)
 - [プレイヤーデータ移行監査](data-audit.md)
 - [開発ガイド](development.md)

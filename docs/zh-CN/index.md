@@ -9,6 +9,7 @@ jar。
 ## 文档
 
 - [运维指南](operations.md)
+- [原版覆盖范围](vanilla-coverage.md)
 - [额外迁移目标](compat/targets.md)
 - [玩家数据迁移审计](data-audit.md)
 - [开发指南](development.md)

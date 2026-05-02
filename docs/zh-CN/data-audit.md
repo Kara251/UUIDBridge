@@ -13,10 +13,12 @@ UUIDBridge 应迁移的是身份引用，不是玩家名。online-mode 和 offli
 - 常见 UUID 形态：标准字符串、无横杠字符串、int array、long array、
   `UUIDMost` / `UUIDLeast`。
 - 实体、方块实体、玩家数据和模组 NBT 中的归属引用：owner、trusted players、
-  anger/love cause、村民 gossip、BossBar players、袭击保存数据、scoreboard
-  UUID 值、Touhou Little Maid 风格 `owner_uuid`。
-- 单人存档转服务器：显式 `--singleplayer-name <name>` 时，可以把 `level.dat`
-  的 `Data.Player` 复制到 `playerdata/<targetUuid>.dat`。
+  anger/love cause、conversion player、projectile owner/thrower、leash、村民
+  gossip、BossBar players、袭击保存数据、scoreboard UUID 值、玩家头颅 profile、
+  1.21 item component profile、Brain memories、Touhou Little Maid 风格
+  `owner_uuid`。
+- 单人存档转服务器：只有一个映射时自动把 `level.dat` 的 `Data.Player` 复制到
+  `playerdata/<targetUuid>.dat`；多映射时使用 `--singleplayer-name <name>` 指定。
 - `uuidbridge/targets.json` 声明的额外 JSON、NBT 或 region 文件。
 
 ## 重要缺口
@@ -33,11 +35,6 @@ UUIDBridge 应迁移的是身份引用，不是玩家名。online-mode 和 offli
 
 ## 下一批应该补的玩家数据
 
-- 玩家头颅 owner profile 和 item component 里的玩家 UUID。
-- Brain memories 与实体专用引用：liked player、angry target、trusted UUID list、
-  projectile owner/thrower、leash data。
-- `data/map_*.dat` 与 command storage 夹具，因为数据包和模组可能把玩家 UUID
-  存在那里。
 - 权限、领地、队伍、经济、任务、坟墓、商店、家、传送点、背包等真实服务器夹具。
 - 对不支持数据库做 report-only 检测，尽可能标出路径和可能的模组名。
 

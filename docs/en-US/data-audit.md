@@ -14,11 +14,14 @@ be reported but not rewritten by default.
 - Common UUID forms: dashed strings, undashed strings, int arrays, long arrays,
   and `UUIDMost` / `UUIDLeast` pairs.
 - Common ownership references in entities, block entities, player data, and mod
-  NBT: owners, trusted players, anger/love causes, villager gossip targets,
-  custom boss event players, raid saved data, scoreboard UUID values, and
-  Touhou Little Maid style `owner_uuid`.
-- Singleplayer transfer: explicit `--singleplayer-name <name>` can copy
-  `level.dat` `Data.Player` into `playerdata/<targetUuid>.dat`.
+  NBT: owners, trusted players, anger/love causes, conversion players,
+  projectile owner/thrower, leash data, villager gossip targets, custom boss
+  event players, raid saved data, scoreboard UUID values, player head profiles,
+  1.21 item component profiles, Brain memories, and Touhou Little Maid style
+  `owner_uuid`.
+- Singleplayer transfer: when exactly one mapping exists, `level.dat`
+  `Data.Player` is copied automatically into `playerdata/<targetUuid>.dat`;
+  use `--singleplayer-name <name>` when multiple mappings exist.
 - Extra mod files declared by `uuidbridge/targets.json` when they are JSON,
   NBT, or region files.
 
@@ -40,11 +43,6 @@ be reported but not rewritten by default.
 
 ## Next Data To Add
 
-- Player profile references in skull owner data and item components.
-- Brain memories and entity-specific references such as liked players, angry
-  targets, trusted UUID lists, projectile owner/thrower fields, and leash data.
-- Map saved data and command storage fixtures, because datapacks and mods may
-  store player UUIDs there.
 - Permission, claim, team, economy, quest, grave, shop, home, warp, and backpack
   fixtures from real servers before writing mod-specific adapters.
 - Report-only detection for unsupported databases, with clear paths and mod

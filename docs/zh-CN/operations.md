@@ -85,6 +85,8 @@ binary、SQLite、LevelDB 和其他事务型数据库本阶段不直接写入。
 单人存档转服务器时，`level.dat` 里可能有 `Data.Player`，而不是单独的
 `playerdata/<uuid>.dat`。
 
+如果计划里只有一个玩家映射，UUIDBridge 会自动规划复制。多玩家映射时需要明确：
+
 ```sh
 uuidbridge plan online-to-offline --singleplayer-name Alice
 ```

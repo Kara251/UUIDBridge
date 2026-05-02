@@ -13,3 +13,6 @@
 - 删除未接入真实迁移流程的 `IdentityReference` 占位类型。
 - 移除 `targets.json` 对公开 `binary` 条目的支持。
 - 移除 Mojang 联网查询；offline-to-online 迁移必须提供显式映射文件。
+- 补齐原版覆盖夹具和文档，包含 map/command storage、跨维度 region、玩家头颅
+  profile、Brain memories、投掷物、leash 等 UUID 引用；单映射单人存档自动规划
+  `Data.Player` 复制。

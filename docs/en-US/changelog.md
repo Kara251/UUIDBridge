@@ -16,3 +16,7 @@
 - Remove public `binary` entries from `targets.json` support.
 - Remove Mojang network lookup; offline-to-online migration now requires an
   explicit mapping file.
+- Add vanilla coverage fixtures and docs for map/command storage, cross-dimension
+  regions, player head profiles, Brain memories, projectile, leash, and related
+  UUID references; plan single-mapping singleplayer `Data.Player` copies
+  automatically.

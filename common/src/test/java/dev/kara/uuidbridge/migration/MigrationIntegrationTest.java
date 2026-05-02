@@ -57,11 +57,16 @@ class MigrationIntegrationTest {
         assertGzipContains(paths.worldDir().resolve("playerdata").resolve(OFFLINE_UUID + ".dat"), OFFLINE_UUID.toString());
         assertGzipContains(paths.worldDir().resolve("data").resolve("scoreboard.dat"), OFFLINE_UUID.toString());
         assertGzipContains(paths.worldDir().resolve("data").resolve("raids.dat"), OFFLINE_UUID.toString());
+        assertGzipContains(paths.worldDir().resolve("data").resolve("map_0.dat"), OFFLINE_UUID.toString());
+        assertGzipContains(paths.worldDir().resolve("data").resolve("command_storage_uuidbridge.dat"), OFFLINE_UUID.toString());
         assertGzipContains(paths.worldDir().resolve("level.dat"), OFFLINE_UUID.toString());
+        assertGzipContains(paths.worldDir().resolve("level.dat_old"), OFFLINE_UUID.toString());
         assertContains(paths.gameDir().resolve("config").resolve("claims").resolve("alice.json"), OFFLINE_UUID.toString());
         assertRegionContains(paths.worldDir().resolve("entities").resolve("r.0.0.mca"), OFFLINE_UUID.toString());
         assertRegionContains(paths.worldDir().resolve("entities").resolve("r.0.0.mca"), OTHER_UUID.toString());
         assertRegionMissing(paths.worldDir().resolve("entities").resolve("r.0.0.mca"), ONLINE_UUID.toString());
+        assertRegionContains(paths.worldDir().resolve("poi").resolve("r.0.0.mca"), OFFLINE_UUID.toString());
+        assertRegionContains(paths.worldDir().resolve("DIM-1").resolve("region").resolve("r.0.0.mca"), OFFLINE_UUID.toString());
 
         BackupManifest manifest = JsonCodecs.read(Path.of(report.backupPath()).resolve("manifest.json"), BackupManifest.class);
         assertTrue(manifest.complete());
@@ -234,6 +239,41 @@ class MigrationIntegrationTest {
         assertGzipContains(worldDir.resolve("level.dat"), OFFLINE_UUID.toString());
     }
 
+    @Test
+    void autoCopiesSingleplayerPlayerTagWhenOnlyOneMappingExists() throws Exception {
+        Path gameDir = tempDir.resolve("auto-singleplayer-server");
+        Path worldDir = gameDir.resolve("world");
+        Files.createDirectories(worldDir);
+        Files.createDirectories(worldDir.resolve("playerdata"));
+        Files.writeString(gameDir.resolve("usercache.json"), """
+            [
+              {
+                "name": "%s",
+                "uuid": "%s"
+              }
+            ]
+            """.formatted(NAME, ONLINE_UUID));
+        Files.write(worldDir.resolve("level.dat"), gzip("""
+            {
+              "Data": {
+                "Player": {
+                  "UUID": "%s"
+                }
+              }
+            }
+            """.formatted(ONLINE_UUID)));
+        UuidBridgePaths paths = UuidBridgePaths.create(gameDir, worldDir);
+        MigrationService service = new MigrationService();
+
+        MigrationPlan plan = service.createPlan(paths, MigrationDirection.ONLINE_TO_OFFLINE, Optional.empty());
+
+        assertTrue(plan.canApply());
+        assertTrue(plan.singleplayerPlayerCopy() != null);
+        service.markPending(paths, plan.id());
+        assertTrue(service.executePending(paths).successful());
+        assertTrue(Files.exists(worldDir.resolve("playerdata").resolve(OFFLINE_UUID + ".dat")));
+    }
+
     private UuidBridgePaths fixture(UUID fileUuid, UUID contentUuid, Optional<Path> mappingFile) throws Exception {
         Path gameDir = tempDir.resolve("server");
         Path worldDir = gameDir.resolve("world");
@@ -241,6 +281,8 @@ class MigrationIntegrationTest {
         Files.createDirectories(worldDir.resolve("advancements"));
         Files.createDirectories(worldDir.resolve("stats"));
         Files.createDirectories(worldDir.resolve("entities"));
+        Files.createDirectories(worldDir.resolve("poi"));
+        Files.createDirectories(worldDir.resolve("DIM-1").resolve("region"));
         Files.createDirectories(worldDir.resolve("data"));
         Files.createDirectories(gameDir.resolve("config").resolve("claims"));
         Files.createDirectories(gameDir.resolve("uuidbridge"));
@@ -276,12 +318,21 @@ class MigrationIntegrationTest {
         Files.write(worldDir.resolve("level.dat"), gzip("""
             {"Data":{"CustomBossEvents":{"uuidbridge:test":{"Players":["%s"]}}}}
             """.formatted(contentUuid)));
+        Files.write(worldDir.resolve("level.dat_old"), gzip("""
+            {"Data":{"WanderingTraderId":"%s"}}
+            """.formatted(contentUuid)));
         Files.write(worldDir.resolve("data").resolve("scoreboard.dat"), gzip("""
             {"data":{"Objectives":[{"Name":"Alice","Owner":"%s"}]}}
             """.formatted(contentUuid)));
         Files.write(worldDir.resolve("data").resolve("raids.dat"), gzip("""
             {"HeroesOfTheVillage":["%s"],"Random":"%s"}
             """.formatted(contentUuid, OTHER_UUID)));
+        Files.write(worldDir.resolve("data").resolve("map_0.dat"), gzip("""
+            {"Decorations":[{"Owner":"%s"}]}
+            """.formatted(contentUuid)));
+        Files.write(worldDir.resolve("data").resolve("command_storage_uuidbridge.dat"), gzip("""
+            {"data":{"uuidbridge:test":{"owner":"%s","name":"Alice"}}}
+            """.formatted(contentUuid)));
         Files.writeString(worldDir.resolve("advancements").resolve(fileUuid + ".json"), """
             {"criteria":{"uuid":"%s","other":"%s"}}
             """.formatted(contentUuid, OTHER_UUID));
@@ -291,6 +342,12 @@ class MigrationIntegrationTest {
         Files.write(worldDir.resolve("entities").resolve("r.0.0.mca"), region("""
             {"id":"touhou_little_maid:maid","owner_uuid":"%s","Other":"%s"}
             """.formatted(contentUuid, OTHER_UUID)));
+        Files.write(worldDir.resolve("poi").resolve("r.0.0.mca"), region("""
+            {"Records":[{"ticket_holder":"%s"}]}
+            """.formatted(contentUuid)));
+        Files.write(worldDir.resolve("DIM-1").resolve("region").resolve("r.0.0.mca"), region("""
+            {"Level":{"Owner":"%s"}}
+            """.formatted(contentUuid)));
 
         if (mappingFile.isPresent()) {
             Files.copy(mappingFile.get(), gameDir.resolve("mapping.csv"));

@@ -27,7 +27,7 @@ class NbtIdentityRewriterTest {
     void rewritesSemanticNbtIdentityShapes() throws Exception {
         FileChangeResult result = NbtIdentityRewriter.rewrite(vanillaIdentityFixture(ONLINE), List.of(MAPPING));
 
-        assertEquals(10, result.replacements());
+        assertEquals(17, result.replacements());
 
         UuidMapping reverse = new UuidMapping(
             "Alice",
@@ -36,7 +36,7 @@ class NbtIdentityRewriterTest {
             MigrationDirection.OFFLINE_TO_ONLINE,
             MappingSource.MAPPING_FILE
         );
-        assertEquals(10, NbtIdentityRewriter.rewrite(result.content(), List.of(reverse)).replacements());
+        assertEquals(17, NbtIdentityRewriter.rewrite(result.content(), List.of(reverse)).replacements());
     }
 
     private static byte[] vanillaIdentityFixture(UUID uuid) throws Exception {
@@ -50,8 +50,15 @@ class NbtIdentityRewriterTest {
             writeLong(output, "UUIDMost", uuid.getMostSignificantBits());
             writeLong(output, "UUIDLeast", uuid.getLeastSignificantBits());
             writeStringList(output, "Players", List.of(uuid.toString()));
+            writeIntArrayList(output, "Trusted", List.of(uuid));
+            writeIntArray(output, "LoveCause", UuidBinaryCodec.asIntArray(uuid));
+            writeIntArray(output, "AngerCause", UuidBinaryCodec.asIntArray(uuid));
+            writeIntArray(output, "conversion_player", UuidBinaryCodec.asIntArray(uuid));
+            writeIntArray(output, "UUID", UuidBinaryCodec.asIntArray(uuid));
             writeGossips(output, uuid);
+            writeRaidHeroes(output, uuid);
             writeSkullOwner(output, uuid);
+            writeItemProfileComponent(output, uuid);
             writeBrainAngryAt(output, uuid);
             writeLeash(output, uuid);
             writeLongArray(output, "Thrower", uuid);
@@ -75,6 +82,10 @@ class NbtIdentityRewriterTest {
     private static void writeIntArray(DataOutputStream output, String name, byte[] encoded) throws Exception {
         output.writeByte(11);
         output.writeUTF(name);
+        writeIntArrayPayload(output, encoded);
+    }
+
+    private static void writeIntArrayPayload(DataOutputStream output, byte[] encoded) throws Exception {
         output.writeInt(4);
         for (int index = 0; index < encoded.length; index += 4) {
             output.writeInt(((encoded[index] & 0xFF) << 24)
@@ -91,6 +102,16 @@ class NbtIdentityRewriterTest {
         output.writeInt(values.size());
         for (String value : values) {
             output.writeUTF(value);
+        }
+    }
+
+    private static void writeIntArrayList(DataOutputStream output, String name, List<UUID> values) throws Exception {
+        output.writeByte(9);
+        output.writeUTF(name);
+        output.writeByte(11);
+        output.writeInt(values.size());
+        for (UUID value : values) {
+            writeIntArrayPayload(output, UuidBinaryCodec.asIntArray(value));
         }
     }
 
@@ -114,8 +135,12 @@ class NbtIdentityRewriterTest {
         output.writeUTF("Gossips");
         output.writeByte(10);
         output.writeInt(1);
-        writeString(output, "Target", uuid.toString());
+        writeIntArray(output, "Target", UuidBinaryCodec.asIntArray(uuid));
         output.writeByte(0);
+    }
+
+    private static void writeRaidHeroes(DataOutputStream output, UUID uuid) throws Exception {
+        writeIntArrayList(output, "HeroesOfTheVillage", List.of(uuid));
     }
 
     private static void writeSkullOwner(DataOutputStream output, UUID uuid) throws Exception {
@@ -123,10 +148,15 @@ class NbtIdentityRewriterTest {
             UuidBinaryCodec.asIntArray(uuid)));
     }
 
+    private static void writeItemProfileComponent(DataOutputStream output, UUID uuid) throws Exception {
+        writeCompound(output, "components", components -> writeCompound(components, "minecraft:profile",
+            profile -> writeIntArray(profile, "id", UuidBinaryCodec.asIntArray(uuid))));
+    }
+
     private static void writeBrainAngryAt(DataOutputStream output, UUID uuid) throws Exception {
         writeCompound(output, "Brain", brain -> writeCompound(brain, "memories",
             memories -> writeCompound(memories, "minecraft:angry_at",
-                angryAt -> writeString(angryAt, "value", uuid.toString()))));
+                angryAt -> writeIntArray(angryAt, "value", UuidBinaryCodec.asIntArray(uuid)))));
     }
 
     private static void writeLeash(DataOutputStream output, UUID uuid) throws Exception {

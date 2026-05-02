@@ -9,6 +9,7 @@ server-side jars.
 ## Guides
 
 - [Operations guide](operations.md)
+- [Vanilla coverage](vanilla-coverage.md)
 - [Extra migration targets](compat/targets.md)
 - [Player data migration audit](data-audit.md)
 - [Development guide](development.md)

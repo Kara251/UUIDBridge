@@ -145,15 +145,19 @@ public final class MigrationPlanner {
         List<PlanConflict> conflicts,
         List<MissingMapping> missing
     ) throws IOException {
-        if (singleplayerName.isEmpty() || singleplayerName.get().isBlank()) {
-            return null;
-        }
-        String name = singleplayerName.get();
-        Optional<UuidMapping> mapping = mappings.stream()
-            .filter(value -> value.name().equalsIgnoreCase(name))
-            .findFirst();
-        if (mapping.isEmpty()) {
-            missing.add(new MissingMapping(name, null, "No mapping found for --singleplayer-name."));
+        Optional<UuidMapping> mapping;
+        if (singleplayerName.isPresent() && !singleplayerName.get().isBlank()) {
+            String name = singleplayerName.get();
+            mapping = mappings.stream()
+                .filter(value -> value.name().equalsIgnoreCase(name))
+                .findFirst();
+            if (mapping.isEmpty()) {
+                missing.add(new MissingMapping(name, null, "No mapping found for --singleplayer-name."));
+                return null;
+            }
+        } else if (mappings.size() == 1) {
+            mapping = Optional.of(mappings.getFirst());
+        } else {
             return null;
         }
         Path source = paths.worldDir().resolve("level.dat");

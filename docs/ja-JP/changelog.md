@@ -16,3 +16,7 @@
 - `targets.json` の公開 `binary` entry support を削除。
 - Mojang network lookup を削除。offline-to-online migration では明示的な
   mapping file が必須です。
+- map/command storage、cross-dimension region、player head profile、
+  Brain memories、projectile、leash などの UUID reference について vanilla
+  coverage fixture と docs を追加。mapping が 1 件だけの singleplayer
+  `Data.Player` copy を自動計画します。

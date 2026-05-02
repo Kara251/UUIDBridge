@@ -92,6 +92,9 @@ adapter explicitly supports that format.
 For singleplayer worlds being moved to a dedicated server, `level.dat` may
 contain `Data.Player` instead of a separate `playerdata/<uuid>.dat` file.
 
+UUIDBridge plans the copy automatically when the plan contains exactly one
+player mapping. Use an explicit name when multiple mappings exist:
+
 ```sh
 uuidbridge plan online-to-offline --singleplayer-name Alice
 ```
